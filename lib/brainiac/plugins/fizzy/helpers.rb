@@ -7,13 +7,15 @@ module Brainiac
       # These were previously in lib/brainiac/helpers.rb in core.
       module Helpers
         class << self
+          # Returns true if signature is valid (or no secret configured).
+          # Returns false if signature verification fails.
           def verify_signature!(request, payload_body, board_key: nil)
             secret = board_key ? Config.board_webhook_secret(board_key) : ENV.fetch("FIZZY_WEBHOOK_SECRET", nil)
-            return unless secret
+            return true unless secret
 
             signature = request.env["HTTP_X_HUB_SIGNATURE_256"] || request.env["HTTP_X_FIZZY_SIGNATURE"]
             expected = "sha256=#{OpenSSL::HMAC.hexdigest("SHA256", secret, payload_body)}"
-            halt 401, { error: "Invalid signature" }.to_json unless signature && Rack::Utils.secure_compare(expected, signature)
+            signature && Rack::Utils.secure_compare(expected, signature)
           end
 
           def fizzy_token_for(agent_name)

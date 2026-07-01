@@ -50,7 +50,8 @@ module Brainiac
             payload_body = request.body.read
             board_key = params["board_key"]
 
-            Brainiac::Plugins::Fizzy::Helpers.verify_signature!(request, payload_body, board_key: board_key)
+            Brainiac::Plugins::Fizzy::Helpers.verify_signature!(request, payload_body, board_key: board_key) or
+              halt 401, { error: "Invalid signature" }.to_json
 
             payload = JSON.parse(payload_body)
             event_id = payload["id"]

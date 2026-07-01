@@ -45,6 +45,11 @@ def verify_fizzy_signature!(request, payload_body, board_key: nil)
   Brainiac::Plugins::Fizzy::Helpers.verify_signature!(request, payload_body, board_key: board_key)
 end
 
+# Legacy alias used by handler files
+def verify_signature!(request, payload_body, board_key: nil)
+  Brainiac::Plugins::Fizzy::Helpers.verify_signature!(request, payload_body, board_key: board_key)
+end
+
 # Config delegators
 def identify_project_by_tags(tags)
   Brainiac::Plugins::Fizzy::Config.identify_project_by_tags(tags)
