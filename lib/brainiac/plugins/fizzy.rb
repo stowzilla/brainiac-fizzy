@@ -58,7 +58,7 @@ module Brainiac
             LOG.info "[Fizzy] Received event #{event_id}: action=#{action}"
 
             if already_processed?(event_id)
-              LOG.info "Skipping duplicate event #{event_id}"
+              LOG.info "[Fizzy] Skipping duplicate event #{event_id}"
               halt 200, { status: "duplicate" }.to_json
             end
 
@@ -83,10 +83,10 @@ module Brainiac
               halt 200, { status: "ignored", action: action }.to_json
             end
           rescue JSON::ParserError => e
-            LOG.error "Invalid JSON: #{e.message}"
+            LOG.error "[Fizzy] Invalid JSON: #{e.message}"
             halt 400, { error: "Invalid JSON" }.to_json
           rescue StandardError => e
-            LOG.error "Unhandled error: #{e.message}\n#{e.backtrace.first(5).join("\n")}"
+            LOG.error "[Fizzy] Unhandled error: #{e.message}\n#{e.backtrace.first(5).join("\n")}"
             halt 500, { error: e.message }.to_json
           end
 
