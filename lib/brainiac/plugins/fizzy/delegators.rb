@@ -82,3 +82,10 @@ end
 def human_mentioned?(user_id)
   Brainiac::Plugins::Fizzy::Config.human_mentioned?(user_id)
 end
+
+# Top-level prompt constants — handler files reference these directly
+PROMPT_CARD_ASSIGNED = Brainiac::Plugins::Fizzy::Prompts::CARD_ASSIGNED
+PROMPT_FOLLOWUP_WORKTREE = Brainiac::Plugins::Fizzy::Prompts::FOLLOWUP_WORKTREE
+PROMPT_FOLLOWUP_NO_WORKTREE = Brainiac::Plugins::Fizzy::Prompts::FOLLOWUP_NO_WORKTREE
+PROMPT_MENTION = Brainiac::Plugins::Fizzy::Prompts::MENTION
+PROMPT_CROSS_AGENT_REVIEW = Brainiac::Plugins::Fizzy::Prompts::CROSS_AGENT_REVIEW
