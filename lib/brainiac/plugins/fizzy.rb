@@ -50,8 +50,12 @@ module Brainiac
             payload_body = request.body.read
             board_key = params["board_key"]
 
-            Brainiac::Plugins::Fizzy::Helpers.verify_signature!(request, payload_body, board_key: board_key) or
+            LOG.debug "[Fizzy] Webhook received: board_key=#{board_key}, content_length=#{payload_body.length}" if LOG.debug?
+
+            unless Brainiac::Plugins::Fizzy::Helpers.verify_signature!(request, payload_body, board_key: board_key)
+              LOG.warn "[Fizzy] Signature verification failed for board_key=#{board_key}"
               halt 401, { error: "Invalid signature" }.to_json
+            end
 
             payload = JSON.parse(payload_body)
             event_id = payload["id"]

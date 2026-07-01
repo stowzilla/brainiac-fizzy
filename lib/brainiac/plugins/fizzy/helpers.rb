@@ -10,12 +10,14 @@ module Brainiac
           # Returns true if signature is valid (or no secret configured).
           # Returns false if signature verification fails.
           def verify_signature!(request, payload_body, board_key: nil)
-            secret = board_key ? Config.board_webhook_secret(board_key) : ENV.fetch("FIZZY_WEBHOOK_SECRET", nil)
-            return true unless secret
+            signature = request.env["HTTP_X_WEBHOOK_SIGNATURE"]
+            return false unless signature
 
-            signature = request.env["HTTP_X_HUB_SIGNATURE_256"] || request.env["HTTP_X_FIZZY_SIGNATURE"]
-            expected = "sha256=#{OpenSSL::HMAC.hexdigest("SHA256", secret, payload_body)}"
-            signature && Rack::Utils.secure_compare(expected, signature)
+            secret = board_key ? Config.board_webhook_secret(board_key) : ENV.fetch("FIZZY_WEBHOOK_SECRET", nil)
+            return false unless secret
+
+            computed = OpenSSL::HMAC.hexdigest("sha256", secret, payload_body)
+            Rack::Utils.secure_compare(signature, computed)
           end
 
           def fizzy_token_for(agent_name)
