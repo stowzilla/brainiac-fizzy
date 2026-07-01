@@ -6,6 +6,7 @@ require_relative "fizzy/helpers"
 require_relative "fizzy/prompts"
 require_relative "fizzy/planning"
 require_relative "fizzy/hooks"
+require_relative "fizzy/delegators"
 
 # Handler sub-modules (define top-level functions for webhook handling)
 require_relative "fizzy/handlers/assignment"

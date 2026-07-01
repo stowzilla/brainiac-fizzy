@@ -114,10 +114,10 @@ class CardIndex
     output, _, status = Open3.capture3("qmd", "collection", "list")
     return if status.success? && output.include?(SEMANTIC_COLLECTION)
 
-    LOG.info "[CardIndex] Creating qmd collection '#{SEMANTIC_COLLECTION}'"
+    LOG.info "[Fizzy:CardIndex] Creating qmd collection '#{SEMANTIC_COLLECTION}'"
     _, stderr, s = Open3.capture3("qmd", "collection", "add", @titles_dir,
                                   "--name", SEMANTIC_COLLECTION, "--mask", "*.md")
-    LOG.warn "[CardIndex] Failed to create qmd collection: #{stderr}" unless s.success?
+    LOG.warn "[Fizzy:CardIndex] Failed to create qmd collection: #{stderr}" unless s.success?
   end
 
   # Debounced qmd update + embed. Runs in background thread.
@@ -131,15 +131,15 @@ class CardIndex
     end
 
     Thread.new do
-      LOG.info "[CardIndex] Running qmd update for card titles..."
+      LOG.info "[Fizzy:CardIndex] Running qmd update for card titles..."
       _, stderr, s = Open3.capture3("qmd", "update")
-      LOG.warn "[CardIndex] qmd update failed: #{stderr}" unless s.success?
+      LOG.warn "[Fizzy:CardIndex] qmd update failed: #{stderr}" unless s.success?
 
-      LOG.info "[CardIndex] Running qmd embed for card titles..."
+      LOG.info "[Fizzy:CardIndex] Running qmd embed for card titles..."
       _, stderr, s = Open3.capture3("qmd", "embed")
-      LOG.warn "[CardIndex] qmd embed failed: #{stderr}" unless s.success?
+      LOG.warn "[Fizzy:CardIndex] qmd embed failed: #{stderr}" unless s.success?
 
-      LOG.info "[CardIndex] qmd reindex complete"
+      LOG.info "[Fizzy:CardIndex] qmd reindex complete"
 
       needs_rerun = @qmd_mutex.synchronize do
         if @qmd_pending
@@ -152,7 +152,7 @@ class CardIndex
       end
       schedule_qmd_reindex if needs_rerun
     rescue StandardError => e
-      LOG.warn "[CardIndex] qmd reindex failed: #{e.message}"
+      LOG.warn "[Fizzy:CardIndex] qmd reindex failed: #{e.message}"
     end
   end
 
@@ -165,7 +165,7 @@ class CardIndex
              {}
            end
     @mutex.synchronize { @data.replace(data) }
-    LOG.info "[CardIndex] Loaded #{size} cards from disk"
+    LOG.info "[Fizzy:CardIndex] Loaded #{size} cards from disk"
   rescue JSON::ParserError => e
     LOG.error "Failed to parse card index: #{e.message}"
     @mutex.synchronize { @data.replace({}) }
@@ -245,7 +245,7 @@ class CardIndex
     output, stderr, status = Open3.capture3("qmd", "vsearch", title, "-c", SEMANTIC_COLLECTION,
                                             "--json", "--min-score", SEMANTIC_THRESHOLD.to_s, "--all")
     unless status.success?
-      LOG.warn "[CardIndex] qmd vsearch failed: #{stderr.lines.last&.strip}"
+      LOG.warn "[Fizzy:CardIndex] qmd vsearch failed: #{stderr.lines.last&.strip}"
       return []
     end
 
@@ -265,7 +265,7 @@ class CardIndex
       { number: num.to_i, title: entry&.dig("title") || r["snippet"]&.strip || "", score: r["score"], method: :semantic }
     end
   rescue JSON::ParserError => e
-    LOG.warn "[CardIndex] Failed to parse qmd vsearch output: #{e.message}"
+    LOG.warn "[Fizzy:CardIndex] Failed to parse qmd vsearch output: #{e.message}"
     []
   end
 
@@ -303,7 +303,7 @@ class CardIndex
 
   def backfill
     Thread.new do
-      LOG.info "[CardIndex] Starting backfill from Fizzy API..."
+      LOG.info "[Fizzy:CardIndex] Starting backfill from Fizzy API..."
       backfilled = 0
       seen_boards = Set.new
 
@@ -313,7 +313,7 @@ class CardIndex
       end
 
       save
-      LOG.info "[CardIndex] Backfill complete: #{backfilled} new cards indexed (#{size} total)"
+      LOG.info "[Fizzy:CardIndex] Backfill complete: #{backfilled} new cards indexed (#{size} total)"
 
       ensure_card_titles_collection
       schedule_qmd_reindex
@@ -327,19 +327,19 @@ class CardIndex
 
     fizzy_yaml = File.join(repo_path, ".fizzy.yaml")
     unless File.exist?(fizzy_yaml)
-      LOG.debug "[CardIndex] Skipping '#{project_key}' — no .fizzy.yaml"
+      LOG.debug "[Fizzy:CardIndex] Skipping '#{project_key}' — no .fizzy.yaml"
       return nil
     end
 
     begin
       board_id = YAML.safe_load_file(fizzy_yaml)["board"]
     rescue StandardError => e
-      LOG.warn "[CardIndex] Could not read .fizzy.yaml for '#{project_key}': #{e.message}"
+      LOG.warn "[Fizzy:CardIndex] Could not read .fizzy.yaml for '#{project_key}': #{e.message}"
       return nil
     end
 
     if seen_boards.include?(board_id)
-      LOG.debug "[CardIndex] Skipping '#{project_key}' — board #{board_id} already fetched"
+      LOG.debug "[Fizzy:CardIndex] Skipping '#{project_key}' — board #{board_id} already fetched"
       return nil
     end
     seen_boards << board_id
@@ -364,7 +364,7 @@ class CardIndex
     end
     count
   rescue StandardError => e
-    LOG.warn "[CardIndex] Backfill failed for project '#{project_key}': #{e.message}"
+    LOG.warn "[Fizzy:CardIndex] Backfill failed for project '#{project_key}': #{e.message}"
     0
   end
 
