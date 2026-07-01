@@ -1,40 +1,57 @@
 # frozen_string_literal: true
 
 require_relative "fizzy/version"
-require_relative "fizzy/assignment"
-require_relative "fizzy/comments"
-require_relative "fizzy/dedup"
-require_relative "fizzy/deploy"
-require_relative "fizzy/card_index"
-require_relative "fizzy/deployments"
+require_relative "fizzy/config"
+require_relative "fizzy/helpers"
+require_relative "fizzy/prompts"
+require_relative "fizzy/planning"
+require_relative "fizzy/hooks"
+
+# Handler sub-modules (define top-level functions for webhook handling)
+require_relative "fizzy/handlers/assignment"
+require_relative "fizzy/handlers/comments"
+require_relative "fizzy/handlers/dedup"
+require_relative "fizzy/handlers/deploy"
+require_relative "fizzy/handlers/card_index"
+require_relative "fizzy/handlers/deployments"
 
 module Brainiac
   module Plugins
     module Fizzy
       class << self
         # Called by Brainiac plugin system during server startup.
-        # Registers the Fizzy webhook route and card index/deployment background tasks.
         #
         # @param app [Sinatra::Application] The running Brainiac server
         def register(app)
+          # Load Fizzy config
+          Brainiac::Plugins::Fizzy::Config.load!
+
+          # Register channel prompt
+          Brainiac.register_channel_prompt(:fizzy,
+                                          Brainiac::Plugins::Fizzy::Prompts::CHANNEL,
+                                          pre_post_check: Brainiac::Plugins::Fizzy::Prompts::PRE_POST_CHECK)
+
+          # Register lifecycle hooks
+          Brainiac::Plugins::Fizzy::Hooks.register_all!
+
+          # Set up webhook route
           setup_routes(app)
-          log "[Fizzy] Plugin registered (webhook: /fizzy)"
+
+          LOG.info "[Fizzy] Plugin registered (webhook: /fizzy)"
         end
 
         private
 
         def setup_routes(app)
-          # POST /fizzy/:board_key — Incoming Fizzy webhook events
           app.post "/fizzy/?:board_key?" do
             content_type :json
             request.body.rewind
             payload_body = request.body.read
             board_key = params["board_key"]
 
-            verify_signature!(request, payload_body, board_key: board_key)
+            Brainiac::Plugins::Fizzy::Helpers.verify_signature!(request, payload_body, board_key: board_key)
 
             payload = JSON.parse(payload_body)
-
             event_id = payload["id"]
             action = payload["action"]
 
@@ -47,7 +64,6 @@ module Brainiac
 
             reload_projects!
             reload_agent_registry!
-            reload_github_config!
 
             case action
             when "card_assigned"
@@ -74,48 +90,32 @@ module Brainiac
             halt 500, { error: e.message }.to_json
           end
 
-          # GET /api/fizzy — Plugin status endpoint
+          # API status endpoint
           app.get "/api/fizzy" do
             content_type :json
+            config = Brainiac::Plugins::Fizzy::Config.current
             {
               enabled: true,
-              card_index_size: defined?(CARD_INDEX) ? CARD_INDEX.size : 0,
-              deployments: defined?(DEPLOYMENTS) ? DEPLOYMENTS.keys : []
+              boards: config["boards"]&.keys || [],
+              authorized_users: (config["authorized_users"] || []).size
             }.to_json
           end
         end
 
-        def log(msg)
-          LOG.info(msg) if defined?(LOG)
-        end
-
         public
 
-        # Handle card_published and card_triaged events.
-        # Extracted to a module method so it can be tested independently.
         def handle_publish_or_triage(action, payload)
           eventable = payload["eventable"] || {}
           card_number = eventable["number"]&.to_s
 
           if action == "card_triaged" && card_number
-            if self_move_recent?(card_number)
-              LOG.info "[Fizzy] Ignoring card_triaged for ##{card_number} — self-move echo"
-              return [200, { status: "ignored", reason: "self_move" }.to_json]
-            end
-
-            if card_merged?(card_number)
-              LOG.info "[Fizzy] Ignoring card_triaged for ##{card_number} — card already merged"
-              return [200, { status: "ignored", reason: "card_merged" }.to_json]
-            end
+            return [200, { status: "ignored", reason: "self_move" }.to_json] if self_move_recent?(card_number)
+            return [200, { status: "ignored", reason: "card_merged" }.to_json] if card_merged?(card_number)
 
             card_key = "card-#{card_number}"
-            if recently_completed?(card_key)
-              LOG.info "[Fizzy] Ignoring card_triaged for ##{card_number} — recently completed"
-              return [200, { status: "ignored", reason: "recently_completed" }.to_json]
-            end
+            return [200, { status: "ignored", reason: "recently_completed" }.to_json] if recently_completed?(card_key)
           end
 
-          # Only card_published does duplicate detection — card_triaged skips agent dispatch
           if action == "card_published"
             assignees = eventable["assignees"] || []
             if assignees.any? { |a| local_agent_names.include?(a["name"]) }
