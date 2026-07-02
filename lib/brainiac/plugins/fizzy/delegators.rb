@@ -83,6 +83,22 @@ def human_mentioned?(user_id)
   Brainiac::Plugins::Fizzy::Config.human_mentioned?(user_id)
 end
 
+# Webhook dispatch — routes incoming actions to the appropriate handler.
+# Called from within the Sinatra route block, so it must be a top-level method.
+def dispatch_webhook_action(action, payload)
+  case action
+  when "card_assigned"
+    handle_card_assigned(payload)
+  when "comment_created"
+    handle_comment(payload)
+  when "card_published", "card_triaged"
+    Brainiac::Plugins::Fizzy.handle_publish_or_triage(action, payload)
+  else
+    LOG.info "[Fizzy] Ignoring unknown action: #{action}"
+    [200, { status: "ignored", action: action }.to_json]
+  end
+end
+
 # Top-level prompt constants — handler files reference these directly
 PROMPT_CARD_ASSIGNED = Brainiac::Plugins::Fizzy::Prompts::CARD_ASSIGNED
 PROMPT_FOLLOWUP_WORKTREE = Brainiac::Plugins::Fizzy::Prompts::FOLLOWUP_WORKTREE

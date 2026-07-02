@@ -171,20 +171,6 @@ module Brainiac
           end
         end
 
-        def dispatch_webhook_action(action, payload)
-          case action
-          when "card_assigned"
-            handle_card_assigned(payload)
-          when "comment_created"
-            handle_comment(payload)
-          when "card_published", "card_triaged"
-            Brainiac::Plugins::Fizzy.handle_publish_or_triage(action, payload)
-          else
-            LOG.info "[Fizzy] Ignoring unknown action: #{action}"
-            [200, { status: "ignored", action: action }.to_json]
-          end
-        end
-
         public
 
         def handle_publish_or_triage(action, payload)

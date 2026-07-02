@@ -89,7 +89,7 @@ module Brainiac
             tag_names = tags.map { |t| t.is_a?(Hash) ? t["name"] : t.to_s }.map(&:downcase)
 
             PROJECTS.each do |key, config|
-              project_tags = (config["fizzy_tags"] || []).map(&:downcase)
+              project_tags = (config["tags"] || config["fizzy_tags"] || []).map(&:downcase)
               return [key, config] if tag_names.intersect?(project_tags)
             end
 
