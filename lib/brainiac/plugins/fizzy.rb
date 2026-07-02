@@ -186,7 +186,7 @@ module Brainiac
 
           if action == "card_triaged" && card_number
             return [200, { status: "ignored", reason: "self_move" }.to_json] if self_move_recent?(card_number)
-            return [200, { status: "ignored", reason: "card_merged" }.to_json] if card_merged?(card_number)
+            return [200, { status: "ignored", reason: "card_merged" }.to_json] if work_item_merged?(card_number)
 
             card_key = "card-#{card_number}"
             return [200, { status: "ignored", reason: "recently_completed" }.to_json] if recently_completed?(card_key)
