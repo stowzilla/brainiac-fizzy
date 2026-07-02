@@ -356,24 +356,13 @@ def handle_cross_agent_mention(ctx)
 
   react_to_comment(card_number, ctx.comment_id, ctx.project_config, ctx.agent_name, "👀")
 
-  review_worktree_path, review_branch = setup_cross_agent_worktree(ctx, card_number)
-  card_context = prefetch_card_context(card_number, repo_path: ctx.project_config["repo_path"], agent_name: ctx.agent_name)
+  dispatch_cross_agent_review(ctx, card_key: card_key, card_number: card_number,
+                                   card_assigned_agent: card_assigned_agent)
+end
 
-  prompt = render_prompt(PROMPT_CROSS_AGENT_REVIEW,
-                         ctx.comment_vars.merge(
-                           "CARD_NUMBER" => card_number || "N/A",
-                           "CARD_INTERNAL_ID" => ctx.card_internal_id,
-                           "CARD_ID" => card_number || ctx.card_internal_id,
-                           "CARD_AGENT" => card_assigned_agent,
-                           "WORKTREE_PATH" => review_worktree_path,
-                           "BRANCH" => review_branch
-                         ),
-                         brain_context: build_brain_context(
-                           agent_name: ctx.agent_name, card_number: card_number,
-                           project_key: ctx.project_key, comment_body: ctx.plain_text, source: :fizzy
-                         ),
-                         card_context: card_context,
-                         agent_name: ctx.agent_name)
+def dispatch_cross_agent_review(ctx, card_key:, card_number:, card_assigned_agent:)
+  review_worktree_path, review_branch = setup_cross_agent_worktree(ctx, card_number)
+  prompt = build_cross_agent_prompt(ctx, card_number, card_assigned_agent, review_worktree_path, review_branch)
 
   pid, log_file = run_agent(prompt,
                             project_config: ctx.project_config, chdir: review_worktree_path,
@@ -387,6 +376,26 @@ def handle_cross_agent_mention(ctx)
   [200, { status: "cross_agent_review", agent: ctx.agent_name, card_agent: card_assigned_agent,
           card: card_number, card_internal_id: ctx.card_internal_id,
           project: ctx.project_key, worktree: review_worktree_path }.to_json]
+end
+
+def build_cross_agent_prompt(ctx, card_number, card_assigned_agent, worktree_path, branch)
+  card_context = prefetch_card_context(card_number, repo_path: ctx.project_config["repo_path"], agent_name: ctx.agent_name)
+
+  render_prompt(PROMPT_CROSS_AGENT_REVIEW,
+                ctx.comment_vars.merge(
+                  "CARD_NUMBER" => card_number || "N/A",
+                  "CARD_INTERNAL_ID" => ctx.card_internal_id,
+                  "CARD_ID" => card_number || ctx.card_internal_id,
+                  "CARD_AGENT" => card_assigned_agent,
+                  "WORKTREE_PATH" => worktree_path,
+                  "BRANCH" => branch
+                ),
+                brain_context: build_brain_context(
+                  agent_name: ctx.agent_name, card_number: card_number,
+                  project_key: ctx.project_key, comment_body: ctx.plain_text, source: :fizzy
+                ),
+                card_context: card_context,
+                agent_name: ctx.agent_name)
 end
 
 # Handle comment on a card that's already in the card map (or has a worktree override)
@@ -438,6 +447,12 @@ def handle_new_mention(ctx)
 
   react_to_comment(card_number, ctx.comment_id, ctx.project_config, ctx.agent_name, "👀")
 
+  worktree_path, branch = setup_new_mention_worktree(ctx, card_number, card_title)
+  dispatch_new_mention(ctx, card_key: card_key, card_number: card_number,
+                            card_title: card_title, branch: branch, worktree_path: worktree_path)
+end
+
+def setup_new_mention_worktree(ctx, card_number, card_title)
   repo_path = ctx.project_config["repo_path"]
   worktree_path, branch = resolve_or_create_worktree(ctx, card_number, card_title, repo_path)
 
@@ -448,6 +463,10 @@ def handle_new_mention(ctx)
   }
   save_work_item_map(map)
 
+  [worktree_path, branch]
+end
+
+def dispatch_new_mention(ctx, card_key:, card_number:, card_title:, branch:, worktree_path:)
   prompt = build_mention_prompt(ctx, card_number, card_title, branch, worktree_path)
 
   pid, log_file = run_agent(prompt,

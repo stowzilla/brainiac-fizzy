@@ -93,14 +93,14 @@ PROMPT_CROSS_AGENT_REVIEW = Brainiac::Plugins::Fizzy::Prompts::CROSS_AGENT_REVIE
 # Config constants — handler files reference these as top-level constants.
 # These are evaluated after Config.load! has been called (during plugin register).
 # Use a delegating object so it always reflects current config state.
-FIZZY_CONFIG = Class.new {
+FIZZY_CONFIG = Class.new do
   def fetch(key, default = nil) = Brainiac::Plugins::Fizzy::Config.current.fetch(key, default)
   def [](key) = Brainiac::Plugins::Fizzy::Config.current[key]
   def dig(*keys) = Brainiac::Plugins::Fizzy::Config.current.dig(*keys)
-}.new
+end.new
 
-AUTHORIZED_USER_IDS = Class.new {
+AUTHORIZED_USER_IDS = Class.new do
   def include?(id) = Brainiac::Plugins::Fizzy::Config.authorized_user_ids.include?(id)
-  def map(&block) = Brainiac::Plugins::Fizzy::Config.authorized_user_ids.map(&block)
-  def any?(&block) = Brainiac::Plugins::Fizzy::Config.authorized_user_ids.any?(&block)
-}.new
+  def map(&) = Brainiac::Plugins::Fizzy::Config.authorized_user_ids.map(&)
+  def any?(&) = Brainiac::Plugins::Fizzy::Config.authorized_user_ids.any?(&)
+end.new

@@ -15,13 +15,15 @@ TEST_BRAINIAC_DIR = Dir.mktmpdir("brainiac-fizzy-test")
 BRAINIAC_DIR = TEST_BRAINIAC_DIR unless defined?(BRAINIAC_DIR)
 ENV["BRAINIAC_DIR"] = TEST_BRAINIAC_DIR
 
-LOG = Class.new {
-  def info(_msg) = nil
-  def warn(_msg) = nil
-  def error(_msg) = nil
-  def debug(_msg) = nil
-  def debug? = false
-}.new unless defined?(LOG)
+unless defined?(LOG)
+  LOG = Class.new do
+    def info(_msg) = nil
+    def warn(_msg) = nil
+    def error(_msg) = nil
+    def debug(_msg) = nil
+    def debug? = false
+  end.new
+end
 
 AI_AGENT_NAME = "Galen" unless defined?(AI_AGENT_NAME)
 
@@ -33,12 +35,21 @@ module Brainiac
 
   class << self
     def on(event, &block) = @hooks[event] << block
-    def emit(event, **ctx) = @hooks[event].map { |h| h.call(ctx) rescue nil }.compact
-    def register_channel_prompt(ch, prompt, pre_post_check: nil)
-      @channel_prompts[ch] = prompt
-      @channel_pre_post_checks[ch] = pre_post_check if pre_post_check
+
+    def emit(event, **ctx)
+      @hooks[event].filter_map do |h|
+        h.call(ctx)
+      rescue StandardError
+        nil
+      end
+    end
+
+    def register_channel_prompt(channel, prompt, pre_post_check: nil)
+      @channel_prompts[channel] = prompt
+      @channel_pre_post_checks[channel] = pre_post_check if pre_post_check
     end
     attr_reader :hooks, :channel_prompts, :channel_pre_post_checks
+
     def reset_hooks!
       @hooks = Hash.new { |h, k| h[k] = [] }
       @channel_prompts = {}
@@ -64,6 +75,7 @@ def agent_env_var(name, key)
   agent_key = name.downcase.gsub(/[^a-z0-9-]/, "-")
   entry = AGENT_REGISTRY[agent_key]
   return nil unless entry.is_a?(Hash)
+
   entry.dig("env", key)
 end
 
@@ -71,6 +83,7 @@ def agent_env_for(name)
   agent_key = name.downcase.gsub(/[^a-z0-9-]/, "-")
   entry = AGENT_REGISTRY[agent_key]
   return {} unless entry.is_a?(Hash)
+
   entry["env"] || {}
 end
 
@@ -78,11 +91,12 @@ def agent_display_name(name)
   agent_key = name.downcase.gsub(/[^a-z0-9-]/, "-")
   entry = AGENT_REGISTRY[agent_key]
   return name unless entry.is_a?(Hash)
+
   entry["display_name"] || name
 end
 
 def default_project_key = "brainiac"
-def run_cmd(*cmd, chdir:, env: {}) = ""
+def run_cmd(*_cmd, chdir:, env: {}) = ""
 def already_processed?(_id) = false
 def session_active?(_key) = false
 def self_move_recent?(_num, **) = false
@@ -93,7 +107,7 @@ def reload_projects! = nil
 def reload_agent_registry!(**) = nil
 def load_work_item_map = {}
 def save_work_item_map(_map) = nil
-def slugify(t, **) = t.downcase.gsub(/[^a-z0-9]+/, "-")[0..30]
+def slugify(text, **) = text.downcase.gsub(/[^a-z0-9]+/, "-")[0..30]
 def record_self_move(_num) = nil
 
 # Write fizzy.json for tests
@@ -112,7 +126,7 @@ fizzy_config = {
 }
 File.write(File.join(TEST_BRAINIAC_DIR, "fizzy.json"), JSON.generate(fizzy_config))
 
-require_relative "../lib/brainiac-fizzy"
+require_relative "../lib/brainiac_fizzy"
 
 # Load fizzy config (normally done during .register but tests don't call register)
 Brainiac::Plugins::Fizzy::Config.load!

@@ -65,7 +65,7 @@ module Brainiac
 
             comments.last(15).map do |c|
               body = c.dig("body", "plain_text") || ""
-              body = body[0..500] + "..." if body.length > 500
+              body = "#{body[0..500]}..." if body.length > 500
               "**#{c["creator_name"]}** (#{c["id"]}):\n#{body}"
             end.join("\n\n---\n\n")
           rescue StandardError => e
@@ -143,7 +143,7 @@ module Brainiac
 
           def detect_branch_from_comment(body, card_number)
             # Try to find branch in comment body
-            match = body.match(/<code>(fizzy-#{card_number}-[^<]+)<\/code>/)
+            match = body.match(%r{<code>(fizzy-#{card_number}-[^<]+)</code>})
             return match[1] if match
 
             # Fall back to card map
