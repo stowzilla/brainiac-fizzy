@@ -17,6 +17,8 @@ module Brainiac
             register_production_deployed
             register_create_work_item
             register_server_started
+            register_detect_cli_provider
+            register_detect_effort
           end
 
           private
@@ -296,6 +298,42 @@ module Brainiac
                 LOG.info "[Fizzy:CardIndex] Starting background backfill..."
                 CARD_INDEX.backfill
               end
+            end
+          end
+
+          # Detect CLI provider from Fizzy card tags (e.g., cli-grok tag)
+          def register_detect_cli_provider
+            Brainiac.on(:detect_cli_provider) do |ctx|
+              tags = ctx[:tags] || []
+              result = nil
+              tags.each do |tag|
+                name = (tag.is_a?(Hash) ? tag["name"] : tag).to_s.downcase
+                if name.start_with?("cli-")
+                  result = name.sub("cli-", "")
+                  break
+                end
+              end
+              result
+            end
+          end
+
+          # Detect effort level from Fizzy card tags (e.g., effort-high tag)
+          def register_detect_effort
+            Brainiac.on(:detect_effort) do |ctx|
+              tags = ctx[:tags] || []
+              allowed = ctx[:allowed] || []
+              result = nil
+              tags.each do |tag|
+                name = (tag.is_a?(Hash) ? tag["name"] : tag).to_s.downcase
+                if name.start_with?("effort-")
+                  level = name.sub("effort-", "")
+                  if allowed.include?(level)
+                    result = level
+                    break
+                  end
+                end
+              end
+              result
             end
           end
 
