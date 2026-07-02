@@ -15,16 +15,8 @@ def handle_card_assigned(payload)
   assignee_names = assignees.map { |a| a["name"] }.join(", ")
   LOG.info "[Fizzy] Card assigned to: [#{assignee_names}], local agents: [#{local_names.join(", ")}]"
 
-  unless assigned_agent
-    LOG.info "[Fizzy] No local agent matched. Assignees: [#{assignee_names}], Local: [#{local_names.join(", ")}]"
-    return [200, { status: "ignored", reason: "wrong assignee" }.to_json]
-  end
-
-  unless authorized?(payload)
-    creator_name = payload.dig("creator", "name") || "Unknown"
-    notify_unauthorized("card_assigned", creator_name, "card ##{eventable["number"]}")
-    return [200, { status: "ignored", reason: "unauthorized" }.to_json]
-  end
+  return ignore_assignment("wrong assignee", assignee_names, local_names) unless assigned_agent
+  return ignore_unauthorized(payload, eventable) unless authorized?(payload)
 
   card_number = eventable["number"]
   card_internal_id = eventable["id"]
@@ -60,6 +52,17 @@ def handle_card_assigned(payload)
     agent_name: assigned_agent, model: detect_model(project_config, tags: tags),
     effort: detect_effort(project_config, tags: tags), cli_provider_override: detect_cli_provider(tags: tags)
   )
+end
+
+def ignore_assignment(reason, assignee_names, local_names)
+  LOG.info "[Fizzy] No local agent matched. Assignees: [#{assignee_names}], Local: [#{local_names.join(", ")}]"
+  [200, { status: "ignored", reason: reason }.to_json]
+end
+
+def ignore_unauthorized(payload, eventable)
+  creator_name = payload.dig("creator", "name") || "Unknown"
+  notify_unauthorized("card_assigned", creator_name, "card ##{eventable["number"]}")
+  [200, { status: "ignored", reason: "unauthorized" }.to_json]
 end
 
 def react_to_assignment(card_number, repo_path, agent_name)

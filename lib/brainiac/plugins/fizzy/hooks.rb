@@ -33,14 +33,14 @@ module Brainiac
 
               unless ctx[:skip_column_move] || work_item_merged?(card_number)
                 Helpers.move_card_to_column(card_number, "needs_review",
-                                           project_config: ctx[:project_config],
-                                           agent_name: ctx[:agent_name])
+                                            project_config: ctx[:project_config],
+                                            agent_name: ctx[:agent_name])
                 record_self_move(card_number)
               end
 
               Helpers.append_fizzy_comment_footer(card_number,
-                                                 project_config: ctx[:project_config],
-                                                 agent_name: ctx[:agent_name])
+                                                  project_config: ctx[:project_config],
+                                                  agent_name: ctx[:agent_name])
 
               # Planning mode finalization
               Planning.finalize_if_needed(ctx[:prompt_file], ctx[:agent_name], ctx[:project_config])
@@ -87,13 +87,9 @@ module Brainiac
           # Brain context building — inject fizzy CLI knowledge when source is fizzy
           def register_brain_context
             Brainiac.on(:build_brain_context) do |ctx|
-              queries = []
-              if ctx[:source] == :fizzy
-                queries << "fizzy CLI commands"
-              elsif [ctx[:card_title], ctx[:comment_body]].any? { |s| s&.match?(/fizzy/i) }
-                queries << "fizzy CLI commands"
-              end
-              queries
+              fizzy_relevant = ctx[:source] == :fizzy ||
+                               [ctx[:card_title], ctx[:comment_body]].any? { |s| s&.match?(/fizzy/i) }
+              fizzy_relevant ? ["fizzy CLI commands"] : []
             end
           end
 
@@ -119,8 +115,8 @@ module Brainiac
 
               # Move card to UAT
               Helpers.move_card_to_column(card_number, "uat",
-                                         project_config: ctx[:project_config],
-                                         agent_name: card_agent)
+                                          project_config: ctx[:project_config],
+                                          agent_name: card_agent)
               record_self_move(card_number)
 
               # Clear deployment tracking
@@ -199,9 +195,7 @@ module Brainiac
               card_number = card_data.dig("data", "number")
 
               # Assign if requested
-              if card_number && assign_to
-                assign_card(card_number, assign_to, spawn_env)
-              end
+              assign_card(card_number, assign_to, spawn_env) if card_number && assign_to
 
               { number: card_number, url: card_data.dig("data", "url"), title: title }
             rescue StandardError => e
@@ -231,8 +225,8 @@ module Brainiac
                                    board_key: Config.board_key_for_project(project_config))
 
             pid, log_file = run_agent(prompt, project_config: project_config, chdir: repo_path,
-                                      log_name: "uat-#{card_number}", agent_name: agent_name,
-                                      source: :fizzy, source_context: { card_number: card_number }, skip_column_move: true)
+                                              log_name: "uat-#{card_number}", agent_name: agent_name,
+                                              source: :fizzy, source_context: { card_number: card_number }, skip_column_move: true)
             register_session("card-#{card_number}", pid, log_file: log_file, agent_name: agent_name)
             LOG.info "[Fizzy] Dispatched #{agent_name} for UAT on card ##{card_number}" if defined?(LOG)
           rescue StandardError => e
@@ -256,7 +250,7 @@ module Brainiac
               run_cmd("fizzy", "card", "close", card_number.to_s, chdir: repo_path, env: env)
 
               cleanup_work_item_worktrees(card_number, repo_path: repo_path,
-                                    primary_worktree: map_entry&.dig("worktree"), primary_branch: map_entry&.dig("branch"))
+                                                       primary_worktree: map_entry&.dig("worktree"), primary_branch: map_entry&.dig("branch"))
 
               if map_entry
                 internal_id = map.key(map_entry)
@@ -325,12 +319,12 @@ module Brainiac
               result = nil
               tags.each do |tag|
                 name = (tag.is_a?(Hash) ? tag["name"] : tag).to_s.downcase
-                if name.start_with?("effort-")
-                  level = name.sub("effort-", "")
-                  if allowed.include?(level)
-                    result = level
-                    break
-                  end
+                next unless name.start_with?("effort-")
+
+                level = name.sub("effort-", "")
+                if allowed.include?(level)
+                  result = level
+                  break
                 end
               end
               result

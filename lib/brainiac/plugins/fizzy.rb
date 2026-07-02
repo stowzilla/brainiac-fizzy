@@ -29,8 +29,8 @@ module Brainiac
 
           # Register channel prompt
           Brainiac.register_channel_prompt(:fizzy,
-                                          Brainiac::Plugins::Fizzy::Prompts::CHANNEL,
-                                          pre_post_check: Brainiac::Plugins::Fizzy::Prompts::PRE_POST_CHECK)
+                                           Brainiac::Plugins::Fizzy::Prompts::CHANNEL,
+                                           pre_post_check: Brainiac::Plugins::Fizzy::Prompts::PRE_POST_CHECK)
 
           # Register lifecycle hooks
           Brainiac::Plugins::Fizzy::Hooks.register_all!
@@ -44,6 +44,11 @@ module Brainiac
         private
 
         def setup_routes(app)
+          setup_webhook_route(app)
+          setup_api_routes(app)
+        end
+
+        def setup_webhook_route(app)
           app.post "/fizzy/?:board_key?" do
             content_type :json
             request.body.rewind
@@ -71,23 +76,9 @@ module Brainiac
             reload_projects!
             reload_agent_registry!
 
-            case action
-            when "card_assigned"
-              status_code, body = handle_card_assigned(payload)
-              LOG.info "[Fizzy] #{action} response: #{status_code} - #{body}"
-              halt status_code, body
-            when "comment_created"
-              status_code, body = handle_comment(payload)
-              LOG.info "[Fizzy] comment_created response: #{status_code} - #{body}"
-              halt status_code, body
-            when "card_published", "card_triaged"
-              status_code, body = Brainiac::Plugins::Fizzy.handle_publish_or_triage(action, payload)
-              LOG.info "[Fizzy] #{action} response: #{status_code} - #{body}"
-              halt status_code, body
-            else
-              LOG.info "[Fizzy] Ignoring unknown action: #{action}"
-              halt 200, { status: "ignored", action: action }.to_json
-            end
+            status_code, body = dispatch_webhook_action(action, payload)
+            LOG.info "[Fizzy] #{action} response: #{status_code} - #{body}"
+            halt status_code, body
           rescue JSON::ParserError => e
             LOG.error "[Fizzy] Invalid JSON: #{e.message}"
             halt 400, { error: "Invalid JSON" }.to_json
@@ -95,7 +86,9 @@ module Brainiac
             LOG.error "[Fizzy] Unhandled error: #{e.message}\n#{e.backtrace.first(5).join("\n")}"
             halt 500, { error: e.message }.to_json
           end
+        end
 
+        def setup_api_routes(app)
           # API status endpoint
           app.get "/api/fizzy" do
             content_type :json
@@ -122,59 +115,73 @@ module Brainiac
           end
 
           # Deployment API routes (if deployments are configured)
-          if defined?(DEPLOYMENTS_CONFIG)
-            app.get "/api/deployments" do
-              content_type :json
-              reload_deployments_config!
-              reload_deployment_state!
-              { deployments: deployment_status }.to_json
-            end
+          return unless defined?(DEPLOYMENTS_CONFIG)
 
-            app.post "/api/deployments/:env" do
-              content_type :json
-              env_key = params["env"]
-              request.body.rewind
-              payload = JSON.parse(request.body.read)
-              result = deploy_to_environment(env_key, worktree_path: payload["worktree"], deployed_by: payload["deployed_by"])
-              if result[:error]
-                halt 404, result.to_json
-              else
-                { status: "deployed", env: env_key, deployment: result }.to_json
-              end
-            rescue JSON::ParserError
-              halt 400, { error: "Invalid JSON" }.to_json
-            end
+          app.get "/api/deployments" do
+            content_type :json
+            reload_deployments_config!
+            reload_deployment_state!
+            { deployments: deployment_status }.to_json
+          end
 
-            app.delete "/api/deployments/:env" do
-              content_type :json
-              env_key = params["env"]
-              state = load_deployment_state
-              if state.key?(env_key)
-                state[env_key] = { "status" => "available", "cleared_at" => Time.now.iso8601, "last_card" => state[env_key]["card_number"] }
-                save_deployment_state(state)
-                DEPLOYMENT_STATE.replace(state)
-                LOG.info "[Fizzy:Deploy] Manually cleared #{env_key}"
-                { status: "cleared", env: env_key }.to_json
-              else
-                halt 404, { error: "Unknown environment: #{env_key}" }.to_json
-              end
+          app.post "/api/deployments/:env" do
+            content_type :json
+            env_key = params["env"]
+            request.body.rewind
+            payload = JSON.parse(request.body.read)
+            result = deploy_to_environment(env_key, worktree_path: payload["worktree"], deployed_by: payload["deployed_by"])
+            if result[:error]
+              halt 404, result.to_json
+            else
+              { status: "deployed", env: env_key, deployment: result }.to_json
             end
+          rescue JSON::ParserError
+            halt 400, { error: "Invalid JSON" }.to_json
+          end
 
-            app.post "/api/deployments/:env/deploying" do
-              content_type :json
-              env_key = params["env"]
-              config = DEPLOYMENTS_CONFIG["environments"] || {}
-              halt 404, { error: "Unknown environment: #{env_key}" }.to_json unless config.key?(env_key)
-              request.body.rewind
-              payload = begin
-                JSON.parse(request.body.read)
-              rescue StandardError
-                {}
-              end
-              mark_deploying(env_key, worktree_path: payload["worktree"] || "")
-              LOG.info "[Fizzy:Deploy] #{env_key} marked deploying via API"
-              { status: "deploying", env: env_key }.to_json
+          app.delete "/api/deployments/:env" do
+            content_type :json
+            env_key = params["env"]
+            state = load_deployment_state
+            if state.key?(env_key)
+              state[env_key] = { "status" => "available", "cleared_at" => Time.now.iso8601, "last_card" => state[env_key]["card_number"] }
+              save_deployment_state(state)
+              DEPLOYMENT_STATE.replace(state)
+              LOG.info "[Fizzy:Deploy] Manually cleared #{env_key}"
+              { status: "cleared", env: env_key }.to_json
+            else
+              halt 404, { error: "Unknown environment: #{env_key}" }.to_json
             end
+          end
+
+          app.post "/api/deployments/:env/deploying" do
+            content_type :json
+            env_key = params["env"]
+            config = DEPLOYMENTS_CONFIG["environments"] || {}
+            halt 404, { error: "Unknown environment: #{env_key}" }.to_json unless config.key?(env_key)
+            request.body.rewind
+            payload = begin
+              JSON.parse(request.body.read)
+            rescue StandardError
+              {}
+            end
+            mark_deploying(env_key, worktree_path: payload["worktree"] || "")
+            LOG.info "[Fizzy:Deploy] #{env_key} marked deploying via API"
+            { status: "deploying", env: env_key }.to_json
+          end
+        end
+
+        def dispatch_webhook_action(action, payload)
+          case action
+          when "card_assigned"
+            handle_card_assigned(payload)
+          when "comment_created"
+            handle_comment(payload)
+          when "card_published", "card_triaged"
+            Brainiac::Plugins::Fizzy.handle_publish_or_triage(action, payload)
+          else
+            LOG.info "[Fizzy] Ignoring unknown action: #{action}"
+            [200, { status: "ignored", action: action }.to_json]
           end
         end
 
@@ -194,9 +201,7 @@ module Brainiac
 
           if action == "card_published"
             assignees = eventable["assignees"] || []
-            if assignees.any? { |a| local_agent_names.include?(a["name"]) }
-              return handle_card_assigned(payload)
-            end
+            return handle_card_assigned(payload) if assignees.any? { |a| local_agent_names.include?(a["name"]) }
           end
 
           handle_card_published(payload)

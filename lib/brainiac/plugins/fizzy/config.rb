@@ -90,7 +90,7 @@ module Brainiac
 
             PROJECTS.each do |key, config|
               project_tags = (config["fizzy_tags"] || []).map(&:downcase)
-              return [key, config] if (tag_names & project_tags).any?
+              return [key, config] if tag_names.intersect?(project_tags)
             end
 
             # Fall back to default project
