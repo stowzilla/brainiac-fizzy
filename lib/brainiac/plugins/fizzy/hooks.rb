@@ -13,8 +13,10 @@ module Brainiac
             register_brain_context
             register_pr_merged
             register_pr_review_received
+            register_pr_synchronized
             register_production_deployed
             register_create_work_item
+            register_server_started
           end
 
           private
@@ -285,6 +287,50 @@ module Brainiac
             return unless user
 
             Open3.capture2e(spawn_env, "fizzy", "card", "assign", card_number.to_s, "--user", user["id"])
+          end
+
+          # Server started — run card index backfill
+          def register_server_started
+            Brainiac.on(:server_started) do
+              if defined?(CARD_INDEX)
+                LOG.info "[Fizzy:CardIndex] Starting background backfill..."
+                CARD_INDEX.backfill
+              end
+            end
+          end
+
+          # PR synchronized — handle auto-deploy if card is on a deploy env
+          def register_pr_synchronized
+            Brainiac.on(:pr_synchronized) do |ctx|
+              next unless defined?(DEPLOYMENTS_CONFIG)
+
+              card_number = ctx[:card_number]
+              worktree = ctx[:worktree]
+              next unless worktree && File.directory?(worktree)
+
+              state = load_deployment_state
+              config = DEPLOYMENTS_CONFIG["environments"] || {}
+              env_key = state.find { |_k, v| v["card_number"] == card_number && v["status"] == "occupied" }&.first
+              next unless env_key
+
+              env_owner = config.dig(env_key, "owner")
+              next unless env_owner && env_owner.downcase == AI_AGENT_NAME.downcase
+              next if on_deploy_cooldown?(env_key)
+
+              touch_deploy_cooldown(env_key)
+              system("git", "pull", "--ff-only", chdir: worktree)
+
+              deploy_script = File.join(worktree, "scripts", "deploy.sh")
+              next unless File.exist?(deploy_script)
+
+              LOG.info "[Fizzy:Deploy] Auto-deploying card ##{card_number} to #{env_key} (PR updated)"
+              mark_deploying(env_key, worktree_path: worktree)
+              run_pr_sync_deploy(env_key, card_number, worktree, config)
+              true
+            rescue StandardError => e
+              LOG.error "[Fizzy:Deploy] PR sync deploy error: #{e.message}" if defined?(LOG)
+              nil
+            end
           end
         end
       end

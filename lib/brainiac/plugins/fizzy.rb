@@ -106,6 +106,76 @@ module Brainiac
               authorized_users: (config["authorized_users"] || []).size
             }.to_json
           end
+
+          # Card index API (duplicate detection)
+          app.get "/api/card-index" do
+            content_type :json
+            halt 404, { error: "Card index not available" }.to_json unless defined?(CARD_INDEX)
+
+            query = params["q"]
+            if query && !query.empty?
+              similar = CARD_INDEX.find_similar_cards(query)
+              { query: query, matches: similar, total_indexed: CARD_INDEX.size }.to_json
+            else
+              { total: CARD_INDEX.size, cards: CARD_INDEX }.to_json
+            end
+          end
+
+          # Deployment API routes (if deployments are configured)
+          if defined?(DEPLOYMENTS_CONFIG)
+            app.get "/api/deployments" do
+              content_type :json
+              reload_deployments_config!
+              reload_deployment_state!
+              { deployments: deployment_status }.to_json
+            end
+
+            app.post "/api/deployments/:env" do
+              content_type :json
+              env_key = params["env"]
+              request.body.rewind
+              payload = JSON.parse(request.body.read)
+              result = deploy_to_environment(env_key, worktree_path: payload["worktree"], deployed_by: payload["deployed_by"])
+              if result[:error]
+                halt 404, result.to_json
+              else
+                { status: "deployed", env: env_key, deployment: result }.to_json
+              end
+            rescue JSON::ParserError
+              halt 400, { error: "Invalid JSON" }.to_json
+            end
+
+            app.delete "/api/deployments/:env" do
+              content_type :json
+              env_key = params["env"]
+              state = load_deployment_state
+              if state.key?(env_key)
+                state[env_key] = { "status" => "available", "cleared_at" => Time.now.iso8601, "last_card" => state[env_key]["card_number"] }
+                save_deployment_state(state)
+                DEPLOYMENT_STATE.replace(state)
+                LOG.info "[Fizzy:Deploy] Manually cleared #{env_key}"
+                { status: "cleared", env: env_key }.to_json
+              else
+                halt 404, { error: "Unknown environment: #{env_key}" }.to_json
+              end
+            end
+
+            app.post "/api/deployments/:env/deploying" do
+              content_type :json
+              env_key = params["env"]
+              config = DEPLOYMENTS_CONFIG["environments"] || {}
+              halt 404, { error: "Unknown environment: #{env_key}" }.to_json unless config.key?(env_key)
+              request.body.rewind
+              payload = begin
+                JSON.parse(request.body.read)
+              rescue StandardError
+                {}
+              end
+              mark_deploying(env_key, worktree_path: payload["worktree"] || "")
+              LOG.info "[Fizzy:Deploy] #{env_key} marked deploying via API"
+              { status: "deploying", env: env_key }.to_json
+            end
+          end
         end
 
         public
