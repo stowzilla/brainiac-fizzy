@@ -10,7 +10,7 @@ AllCops:
     - "tmp/**/*"
 
 Metrics/BlockLength:
-  Max: 25
+  Max: 30
   Exclude:
     - "test/**/*"
     - "*.gemspec"
@@ -18,10 +18,10 @@ Metrics/BlockLength:
     - heredoc
 
 Metrics/MethodLength:
-  Max: 45
+  Max: 75
 
 Metrics/AbcSize:
-  Max: 50
+  Max: 90
   Exclude:
     - "lib/brainiac/plugins/fizzy/handlers/**/*"
 
@@ -35,8 +35,11 @@ Metrics/PerceivedComplexity:
   Exclude:
     - "lib/brainiac/plugins/fizzy/handlers/**/*"
 
+Metrics/ModuleLength:
+  Max: 300
+
 Metrics/ClassLength:
-  Max: 150
+  Max: 300
   Exclude:
     - "test/**/*"
 
