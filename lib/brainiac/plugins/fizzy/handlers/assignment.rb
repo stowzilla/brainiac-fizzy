@@ -76,12 +76,12 @@ def setup_assigned_worktree(repo_path, branch, card_internal_id, card_number, pr
   worktree_path = File.join(File.dirname(repo_path), "#{File.basename(repo_path)}--#{branch}")
   worktree_path = create_or_reuse_worktree(repo_path: repo_path, branch: branch, worktree_path: worktree_path)
 
-  map = load_card_map
+  map = load_work_item_map
   map[card_internal_id] = {
     "number" => card_number, "branch" => branch, "worktree" => worktree_path,
     "project" => project_key, "agent" => agent_name
   }
-  save_card_map(map)
+  save_work_item_map(map)
   worktree_path
 end
 

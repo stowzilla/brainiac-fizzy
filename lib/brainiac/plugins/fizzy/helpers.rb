@@ -147,7 +147,7 @@ module Brainiac
             return match[1] if match
 
             # Fall back to card map
-            map = load_card_map
+            map = load_work_item_map
             entry = map.values.find { |v| v["number"].to_s == card_number.to_s }
             entry&.dig("branch")
           end

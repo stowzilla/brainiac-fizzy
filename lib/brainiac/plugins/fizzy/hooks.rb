@@ -31,7 +31,7 @@ module Brainiac
               card_number = ctx[:card_number]
               next unless card_number && ctx[:exit_status]&.zero? && !ctx[:signaled]
 
-              unless ctx[:skip_column_move] || card_merged?(card_number)
+              unless ctx[:skip_column_move] || work_item_merged?(card_number)
                 Helpers.move_card_to_column(card_number, "needs_review",
                                            project_config: ctx[:project_config],
                                            agent_name: ctx[:agent_name])
@@ -241,7 +241,7 @@ module Brainiac
 
           def close_uat_cards(card_list, repo_path)
             closed = []
-            map = load_card_map
+            map = load_work_item_map
 
             card_list.each do |card|
               card_number = card["number"]
@@ -255,7 +255,7 @@ module Brainiac
                       "--body", "<p>✅ Deployed to production. Closing card.</p>", chdir: repo_path, env: env)
               run_cmd("fizzy", "card", "close", card_number.to_s, chdir: repo_path, env: env)
 
-              cleanup_card_worktrees(card_number, repo_path: repo_path,
+              cleanup_work_item_worktrees(card_number, repo_path: repo_path,
                                     primary_worktree: map_entry&.dig("worktree"), primary_branch: map_entry&.dig("branch"))
 
               if map_entry
@@ -266,7 +266,7 @@ module Brainiac
               closed << { number: card_number, url: card["url"], title: card["title"] }
             end
 
-            save_card_map(map) if closed.any?
+            save_work_item_map(map) if closed.any?
             closed
           end
 
