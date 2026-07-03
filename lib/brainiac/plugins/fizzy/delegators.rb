@@ -41,6 +41,11 @@ def scrub_invalid_attachments!(dir)
   Brainiac::Plugins::Fizzy::Helpers.scrub_invalid_attachments!(dir)
 end
 
+def detect_planning_mode(text:, tags:, card_internal_id:, card_number:)
+  Brainiac::Plugins::Fizzy::Helpers.detect_planning_mode(text: text, tags: tags,
+                                                         card_internal_id: card_internal_id, card_number: card_number)
+end
+
 def verify_fizzy_signature!(request, payload_body, board_key: nil)
   Brainiac::Plugins::Fizzy::Helpers.verify_signature!(request, payload_body, board_key: board_key)
 end
@@ -81,6 +86,14 @@ end
 
 def human_mentioned?(user_id)
   Brainiac::Plugins::Fizzy::Config.human_mentioned?(user_id)
+end
+
+# Extracts user IDs from Fizzy mention markup in plain text.
+# Fizzy represents mentions as @[Display Name](user-id) in plain text.
+def detect_mentioned_user_ids(text)
+  return [] unless text
+
+  text.scan(/@\[[^\]]*\]\(([^)]+)\)/).flatten
 end
 
 # Webhook dispatch — routes incoming actions to the appropriate handler.

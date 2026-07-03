@@ -139,6 +139,16 @@ module Brainiac
             end
           end
 
+          # Determines whether a card should run in planning mode.
+          # Returns nil if planning is not active, or { card_id: <id> } if it is.
+          # Planning mode is triggered by a "plan" or "planning" tag on the card.
+          def detect_planning_mode(text:, tags:, card_internal_id:, card_number:)
+            tag_names = (tags || []).map { |t| t.is_a?(Hash) ? t["name"] : t.to_s }.map(&:downcase)
+            return nil unless tag_names.include?("plan") || tag_names.include?("planning")
+
+            { card_id: card_number || card_internal_id }
+          end
+
           private
 
           def detect_branch_from_comment(body, card_number)
