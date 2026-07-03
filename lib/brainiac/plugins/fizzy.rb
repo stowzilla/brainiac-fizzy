@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "fizzy/version"
+require_relative "fizzy/metadata"
 require_relative "fizzy/config"
 require_relative "fizzy/helpers"
 require_relative "fizzy/prompts"
