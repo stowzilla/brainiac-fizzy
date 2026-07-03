@@ -69,13 +69,13 @@ def react_to_assignment(card_number, repo_path, agent_name)
   Thread.new do
     # Delete existing reactions from this agent before re-reacting
     result = run_cmd("fizzy", "reaction", "list", "--card", card_number.to_s,
-                     "--jq", '[.data[] | {id, reacter_id: .reacter.id}]',
+                     "--jq", "[.data[] | {id, reacter_id: .reacter.id}]",
                      chdir: repo_path, env: fizzy_env_for(agent_name))
     reactions = JSON.parse(result)
 
-    identity = run_cmd("fizzy", "identity", "show", "--jq", '.data.accounts[0].user.id',
+    identity = run_cmd("fizzy", "identity", "show", "--jq", ".data.accounts[0].user.id",
                        chdir: repo_path, env: fizzy_env_for(agent_name))
-    current_user_id = identity.strip.tr('"', '')
+    current_user_id = identity.strip.tr('"', "")
 
     reactions.each do |reaction|
       if reaction["reacter_id"] == current_user_id
