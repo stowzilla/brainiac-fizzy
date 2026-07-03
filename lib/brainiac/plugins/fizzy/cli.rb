@@ -132,6 +132,11 @@ module Brainiac
       def self.cli(args)
         Cli.run(args)
       end
+
+      # Subcommand names for bash completion.
+      def self.completions
+        %w[config status setup]
+      end
     end
   end
 end
