@@ -488,10 +488,10 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
   effort = detect_effort(ctx.project_config, tags: card_tags, text: ctx.plain_text)
 
   is_worktree = work_dir != ctx.project_config["repo_path"]
-  resolved = resolve_project_cli_config(ctx.project_config,
-                                        cli_provider_override: ctx.cli_provider_override,
-                                        agent_name: ctx.agent_name)
-  should_resume = is_worktree && resolved["resume_flag"]
+  should_resume = is_worktree && resume_viable?(
+    project_config: ctx.project_config, cli_provider: ctx.cli_provider_override,
+    agent_name: ctx.agent_name, chdir: work_dir
+  )
 
   prompt = if should_resume
              LOG.info "[Resume] Using lean prompt for follow-up on card #{card_number || ctx.card_internal_id}"
@@ -508,7 +508,7 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
                             log_name: "followup-#{card_number || ctx.card_internal_id}",
                             model: ctx.model, effort: effort, agent_name: ctx.agent_name,
                             card_number: card_number, comment_id: ctx.comment_id,
-                            source: :fizzy, cli_provider: ctx.cli_provider_override, resume: is_worktree,
+                            source: :fizzy, cli_provider: ctx.cli_provider_override, resume: should_resume,
                             source_context: {
                               card_number: card_number, card_internal_id: ctx.card_internal_id,
                               deploy_intent: ctx.deploy_intent
