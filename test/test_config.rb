@@ -37,6 +37,21 @@ class TestFizzyConfig < Minitest::Test
     assert_nil Brainiac::Plugins::Fizzy::Config.board_key_for_id("unknown")
   end
 
+  def test_board_key_for_project_with_fizzy_board
+    project_config = { "repo_path" => "/tmp/nonexistent-repo", "fizzy_board" => "development" }
+    assert_equal "development", Brainiac::Plugins::Fizzy::Config.board_key_for_project(project_config)
+  end
+
+  def test_board_key_for_project_fizzy_board_invalid
+    project_config = { "repo_path" => "/tmp/nonexistent-repo", "fizzy_board" => "nonexistent" }
+    assert_nil Brainiac::Plugins::Fizzy::Config.board_key_for_project(project_config)
+  end
+
+  def test_board_key_for_project_no_fizzy_yaml_no_fizzy_board
+    project_config = { "repo_path" => "/tmp/nonexistent-repo" }
+    assert_nil Brainiac::Plugins::Fizzy::Config.board_key_for_project(project_config)
+  end
+
   def test_authorized_user
     payload = { "creator" => { "id" => "user-1" } }
     assert Brainiac::Plugins::Fizzy::Config.authorized?(payload)
