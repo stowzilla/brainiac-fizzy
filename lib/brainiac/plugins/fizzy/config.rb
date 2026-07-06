@@ -63,15 +63,22 @@ module Brainiac
           end
 
           def board_key_for_project(project_config)
-            fizzy_yaml = File.join(project_config["repo_path"], ".fizzy.yaml")
-            return nil unless File.exist?(fizzy_yaml)
+            # Priority 1: explicit fizzy_board in project config (board key name from fizzy.json)
+            board_key = project_config["fizzy_board"]
+            return board_key if board_key && @boards.key?(board_key)
 
-            require "yaml"
-            data = YAML.safe_load_file(fizzy_yaml)
-            board_id = data["board"]
-            board_key_for_id(board_id)
+            # Priority 2: .fizzy.yaml in the repo directory
+            fizzy_yaml = File.join(project_config["repo_path"], ".fizzy.yaml")
+            if File.exist?(fizzy_yaml)
+              require "yaml"
+              data = YAML.safe_load_file(fizzy_yaml)
+              board_id = data["board"]
+              return board_key_for_id(board_id)
+            end
+
+            nil
           rescue StandardError => e
-            LOG.warn "[Fizzy] Could not read .fizzy.yaml: #{e.message}" if defined?(LOG)
+            LOG.warn "[Fizzy] Could not resolve board for project: #{e.message}" if defined?(LOG)
             nil
           end
 
