@@ -71,7 +71,10 @@ module Brainiac
           """
 
           Focus your response on the comment above. If you've already addressed this in a previous session, reply confirming it's done.
-          Otherwise, make the requested changes, commit, push, and update the PR.
+          Otherwise, make the requested changes, commit, and push.
+
+          **Response destination: Post your response as a comment on Fizzy card #{{CARD_NUMBER}}.**
+          Do NOT post comments on the GitHub PR — this conversation is happening on the card.
         PROMPT
 
         FOLLOWUP_NO_WORKTREE = <<~PROMPT
