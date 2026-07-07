@@ -18,7 +18,7 @@ Gem::Specification.new do |s|
   s.files = Dir["lib/**/*.rb", "README.md", "LICENSE"]
   s.require_paths = ["lib"]
 
-  s.add_dependency "brainiac", ">= 0.0.8"
+  s.add_dependency "brainiac", ">= 0.0.14"
 
   s.add_development_dependency "minitest", "~> 5.25"
   s.add_development_dependency "rake", "~> 13.0"

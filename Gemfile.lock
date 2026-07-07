@@ -1,20 +1,18 @@
 PATH
   remote: .
   specs:
-    brainiac-fizzy (0.0.5)
-      brainiac (>= 0.0.8)
+    brainiac-fizzy (0.0.6)
+      brainiac (>= 0.0.14)
 
 GEM
   remote: https://rubygems.org/
   specs:
     ast (2.4.3)
     base64 (0.3.0)
-    brainiac (0.0.8)
+    brainiac (0.0.14)
       puma (~> 7.2)
       rackup (~> 2.3)
       sinatra (~> 4.1)
-      websocket-client-simple (~> 0.8.0)
-    event_emitter (0.2.6)
     json (2.20.0)
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)
@@ -73,10 +71,6 @@ GEM
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
     unicode-emoji (4.2.0)
-    websocket (1.2.11)
-    websocket-client-simple (0.8.0)
-      event_emitter
-      websocket
 
 PLATFORMS
   ruby
@@ -92,9 +86,8 @@ DEPENDENCIES
 CHECKSUMS
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
-  brainiac (0.0.8) sha256=39b9e26cd592c6320928f513942fd1f6449096c8ff75026c3fae2bd3b1fa72a0
-  brainiac-fizzy (0.0.5)
-  event_emitter (0.2.6) sha256=c72697bd5cce9d36594be1972c17f1c9a573236f44303a4d1d548080364e1391
+  brainiac (0.0.14) sha256=586ea04a1205f98858c45e2266c858382a0db92d328b336f2c93bd305df1d623
+  brainiac-fizzy (0.0.6)
   json (2.20.0) sha256=9362bc6e55a952b056abf9167cf053358181c904cb70cd6eee0808ea830fc32b
   language_server-protocol (3.17.0.5) sha256=fd1e39a51a28bf3eec959379985a72e296e9f9acfce46f6a79d31ca8760803cc
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
@@ -122,8 +115,6 @@ CHECKSUMS
   tilt (2.7.0) sha256=0d5b9ba69f6a36490c64b0eee9f6e9aad517e20dcc848800a06eb116f08c6ab3
   unicode-display_width (3.2.0) sha256=0cdd96b5681a5949cdbc2c55e7b420facae74c4aaf9a9815eee1087cb1853c42
   unicode-emoji (4.2.0) sha256=519e69150f75652e40bf736106cfbc8f0f73aa3fb6a65afe62fefa7f80b0f80f
-  websocket (1.2.11) sha256=b7e7a74e2410b5e85c25858b26b3322f29161e300935f70a0e0d3c35e0462737
-  websocket-client-simple (0.8.0) sha256=13a7086d79eec7a15fd5e982fb232b5a05d808d217a73112c8f30259146ef68c
 
 BUNDLED WITH
   4.0.15

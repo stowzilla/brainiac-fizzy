@@ -370,7 +370,10 @@ def dispatch_cross_agent_review(ctx, card_key:, card_number:, card_assigned_agen
                             model: ctx.model, effort: ctx.effort, agent_name: ctx.agent_name,
                             card_number: card_number, comment_id: ctx.comment_id,
                             source: :fizzy, source_context: { card_number: card_number },
-                            cli_provider: ctx.cli_provider_override)
+                            cli_provider: ctx.cli_provider_override,
+                            message: ctx.plain_text, channel: "Fizzy comment")
+  return [200, { status: "intent_skip", agent: ctx.agent_name, card: card_number }.to_json] unless pid
+
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: ctx.agent_name)
 
   [200, { status: "cross_agent_review", agent: ctx.agent_name, card_agent: card_assigned_agent,
@@ -475,7 +478,10 @@ def dispatch_new_mention(ctx, card_key:, card_number:, card_title:, branch:, wor
                             model: ctx.model, effort: ctx.effort, agent_name: ctx.agent_name,
                             card_number: card_number, comment_id: ctx.comment_id,
                             source: :fizzy, cli_provider: ctx.cli_provider_override,
-                            source_context: { card_number: card_number })
+                            source_context: { card_number: card_number },
+                            message: ctx.plain_text, channel: "Fizzy comment")
+  return [200, { status: "intent_skip", agent: ctx.agent_name, card: card_number }.to_json] unless pid
+
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: ctx.agent_name)
 
   [200, { status: "responded", card_internal_id: ctx.card_internal_id, card_number: card_number,
@@ -512,7 +518,10 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
                             source_context: {
                               card_number: card_number, card_internal_id: ctx.card_internal_id,
                               deploy_intent: ctx.deploy_intent
-                            })
+                            },
+                            message: ctx.plain_text, channel: "Fizzy comment")
+  return [200, { status: "intent_skip", agent: ctx.agent_name, card: card_number }.to_json] unless pid
+
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: ctx.agent_name)
 
   Thread.new { move_card_to_column(card_number, "right_now", project_config: ctx.project_config, agent_name: ctx.agent_name) }
