@@ -25,6 +25,10 @@ def prefetch_card_context(card_number, repo_path:, agent_name: nil)
   Brainiac::Plugins::Fizzy::Helpers.prefetch_card_context(card_number, repo_path: repo_path, agent_name: agent_name)
 end
 
+def fetch_intent_context(card_number, repo_path:, agent_name: nil)
+  Brainiac::Plugins::Fizzy::Helpers.fetch_intent_context(card_number, repo_path: repo_path, agent_name: agent_name)
+end
+
 def move_card_to_column(card_number, column_name, project_config:, agent_name: nil)
   Brainiac::Plugins::Fizzy::Helpers.move_card_to_column(card_number, column_name, project_config: project_config, agent_name: agent_name)
 end
