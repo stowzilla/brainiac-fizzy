@@ -9,6 +9,7 @@ module Brainiac
           def register_all!
             register_agent_completed
             register_agent_crashed
+            register_agent_lifecycle
             register_pre_dispatch
             register_brain_context
             register_pr_merged
@@ -73,6 +74,19 @@ module Brainiac
             rescue StandardError => e
               LOG.error "[Fizzy] Failed to post crash comment: #{e.message}" if defined?(LOG)
               nil
+            end
+          end
+
+          # Agent lifecycle — reload config when agents are added/removed
+          def register_agent_lifecycle
+            Brainiac.on(:agent_added) do |ctx|
+              Config.reload!
+              LOG.info "[Fizzy] Agent added: #{ctx[:display_name]} — config reloaded" if defined?(LOG)
+            end
+
+            Brainiac.on(:agent_removed) do |ctx|
+              Config.reload!
+              LOG.info "[Fizzy] Agent removed: #{ctx[:agent_key]} — config reloaded" if defined?(LOG)
             end
           end
 

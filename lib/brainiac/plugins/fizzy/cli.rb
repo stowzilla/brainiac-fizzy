@@ -137,6 +137,56 @@ module Brainiac
       def self.completions
         %w[config status setup]
       end
+
+      # Called by brainiac CLI after `agent create` — prompts for Fizzy user ID.
+      def self.on_agent_created(agent_key, entry)
+        return unless $stdin.tty?
+
+        config_file = File.join(ENV.fetch("BRAINIAC_DIR", File.join(Dir.home, ".brainiac")), "fizzy.json")
+        return unless File.exist?(config_file)
+
+        display_name = entry["display_name"] || agent_key.capitalize
+        puts ""
+        puts "  [Fizzy] Configure Fizzy for #{display_name}?"
+        print "  Fizzy user ID (or blank to skip): "
+        user_id = $stdin.gets&.chomp
+        return if user_id.nil? || user_id.empty?
+
+        config = JSON.parse(File.read(config_file))
+        config["authorized_users"] ||= []
+
+        # Don't add if already present
+        existing = config["authorized_users"].find { |u| u["id"] == user_id || u["name"]&.downcase == display_name.downcase }
+        if existing
+          puts "  ✓ #{display_name} already in authorized_users (id: #{existing["id"]})"
+          return
+        end
+
+        config["authorized_users"] << { "id" => user_id, "name" => display_name, "human" => false }
+        File.write(config_file, JSON.pretty_generate(config))
+        puts "  ✓ Added #{display_name} (#{user_id}) to fizzy.json authorized_users"
+      rescue JSON::ParserError => e
+        puts "  ⚠ Could not update fizzy.json: #{e.message}"
+      end
+
+      # Called by brainiac CLI after `agent remove` — removes from Fizzy authorized_users.
+      def self.on_agent_removed(agent_key, display_name)
+        config_file = File.join(ENV.fetch("BRAINIAC_DIR", File.join(Dir.home, ".brainiac")), "fizzy.json")
+        return unless File.exist?(config_file)
+
+        config = JSON.parse(File.read(config_file))
+        users = config["authorized_users"]
+        return unless users
+
+        original_size = users.size
+        users.reject! { |u| u["name"]&.downcase == display_name.downcase || u["name"]&.downcase == agent_key }
+        return if users.size == original_size
+
+        File.write(config_file, JSON.pretty_generate(config))
+        puts "  [Fizzy] Removed #{display_name} from fizzy.json authorized_users"
+      rescue JSON::ParserError
+        nil
+      end
     end
   end
 end
