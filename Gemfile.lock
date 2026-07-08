@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    brainiac-fizzy (0.0.6)
+    brainiac-fizzy (0.0.7)
       brainiac (>= 0.0.14)
 
 GEM
@@ -87,7 +87,7 @@ CHECKSUMS
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
   brainiac (0.0.14) sha256=586ea04a1205f98858c45e2266c858382a0db92d328b336f2c93bd305df1d623
-  brainiac-fizzy (0.0.6)
+  brainiac-fizzy (0.0.7)
   json (2.20.0) sha256=9362bc6e55a952b056abf9167cf053358181c904cb70cd6eee0808ea830fc32b
   language_server-protocol (3.17.0.5) sha256=fd1e39a51a28bf3eec959379985a72e296e9f9acfce46f6a79d31ca8760803cc
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
