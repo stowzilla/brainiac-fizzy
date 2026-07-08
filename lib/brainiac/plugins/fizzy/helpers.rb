@@ -73,6 +73,25 @@ module Brainiac
             ""
           end
 
+          # Lightweight recent comment context for intent classification.
+          # Returns a simple "author: message" format (last 5 comments).
+          def fetch_intent_context(card_number, repo_path:, agent_name: nil)
+            env = fizzy_env_for(agent_name || AI_AGENT_NAME)
+            output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, chdir: repo_path, env: env)
+            comments = JSON.parse(output)["data"] || []
+            return nil if comments.empty?
+
+            comments.last(5).map do |c|
+              creator = c["creator_name"] || "unknown"
+              body = (c.dig("body", "plain_text") || "").lines.first(3).join.strip
+              body = "#{body[0..200]}..." if body.length > 200
+              "#{creator}: #{body}"
+            end.join("\n")
+          rescue StandardError => e
+            LOG.warn "[Fizzy] Could not fetch intent context for card ##{card_number}: #{e.message}" if defined?(LOG)
+            nil
+          end
+
           def move_card_to_column(card_number, column_name, project_config:, agent_name: nil)
             board_key = Config.board_key_for_project(project_config)
             column_id = Config.board_column_id(board_key, column_name) if board_key
