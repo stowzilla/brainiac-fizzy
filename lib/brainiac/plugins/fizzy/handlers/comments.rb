@@ -44,7 +44,13 @@ def handle_comment(payload)
   card_info = load_work_item_map[card_internal_id]
   comment_id = eventable["id"]
 
-  return [200, { status: "ignored", reason: "not relevant" }.to_json] unless mentioned_agent || card_info
+  # If no mention and card isn't in the map, check if the card has a local agent assigned
+  # (handles cards assigned before the plugin started or after a map reset)
+  unless mentioned_agent || card_info
+    card_assignees = eventable.dig("card", "assignees") || []
+    has_local_agent = card_assignees.any? { |a| local_agent_names.include?(a["name"]) }
+    return [200, { status: "ignored", reason: "not relevant" }.to_json] unless has_local_agent
+  end
 
   project_config, project_key = resolve_fizzy_project(card_info, card_internal_id, eventable)
   return [200, { status: "ignored", reason: "no matching project" }.to_json] unless project_config
