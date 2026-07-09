@@ -303,21 +303,26 @@ def resolve_assigned_agent(card_info, card_internal_id, eventable, project_confi
   card_assignees = eventable.dig("card", "assignees") || []
   webhook_agent = card_assignees.map { |a| a["name"] }.find { |name| local_agent_names.include?(name) }
 
-  webhook_agent = resolve_agent_via_api(card_info, card_internal_id, project_config) if webhook_agent.nil? && project_config
+  webhook_agent = resolve_agent_via_api(card_info, card_internal_id, eventable, project_config) if webhook_agent.nil? && project_config
 
   return nil unless webhook_agent
 
   map = load_work_item_map
   map[card_internal_id] ||= {}
   map[card_internal_id]["agent"] = webhook_agent
+  card_number = eventable.dig("card", "number")
+  map[card_internal_id]["number"] = card_number if card_number
   save_work_item_map(map)
   LOG.info "Backfilled agent '#{webhook_agent}' into card map for #{card_internal_id}"
   webhook_agent
 end
 
-def resolve_agent_via_api(card_info, card_internal_id, project_config)
-  api_card_number = card_info&.dig("number") || card_internal_id
-  return nil unless api_card_number
+def resolve_agent_via_api(card_info, card_internal_id, eventable, project_config)
+  api_card_number = card_info&.dig("number") || eventable.dig("card", "number")
+  unless api_card_number
+    LOG.warn "Cannot resolve agent via API — no card number available (internal_id: #{card_internal_id})"
+    return nil
+  end
 
   output = run_cmd("fizzy", "card", "show", api_card_number.to_s,
                    chdir: project_config["repo_path"], env: default_fizzy_env)
