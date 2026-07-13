@@ -41,7 +41,7 @@ def handle_comment(payload)
   agent_result = validate_agent_comment(creator_is_agent, is_api_sourced, creator_name, mentioned_agent, card_internal_id)
   return agent_result if agent_result
 
-  card_info = load_work_item_map[card_internal_id]
+  card_info = lookup_fizzy_card_info(card_internal_id)
   comment_id = eventable["id"]
 
   project_config, project_key = resolve_fizzy_project(card_info, card_internal_id, eventable)
@@ -156,7 +156,7 @@ end
 def validate_agent_comment(creator_is_agent, is_api_sourced, creator_name, mentioned_agent, card_internal_id)
   return nil unless creator_is_agent || is_api_sourced
 
-  card_info = load_work_item_map[card_internal_id]
+  card_info = lookup_fizzy_card_info(card_internal_id)
   card_assigned_agent = card_info&.dig("agent")
 
   agent_is_assigned = card_assigned_agent && card_assigned_agent.downcase == (creator_name || "").downcase
@@ -205,7 +205,8 @@ end
 
 def handle_cancel_command(eventable, card_internal_id)
   killed = 0
-  card_number_for_cancel = load_work_item_map.dig(card_internal_id, "number")
+  cancel_card_info = lookup_fizzy_card_info(card_internal_id)
+  card_number_for_cancel = cancel_card_info&.dig("number")
   prefixes = ["card-#{card_internal_id}"]
   prefixes << "card-#{card_number_for_cancel}" if card_number_for_cancel
 
@@ -227,9 +228,8 @@ def handle_cancel_command(eventable, card_internal_id)
   end
 
   comment_id_for_cancel = eventable["id"]
-  card_info_for_cancel = load_work_item_map[card_internal_id]
-  if card_info_for_cancel && card_number_for_cancel && comment_id_for_cancel
-    repo = (card_info_for_cancel["project"] && PROJECTS.dig(card_info_for_cancel["project"], "repo_path")) ||
+  if cancel_card_info && card_number_for_cancel && comment_id_for_cancel
+    repo = (cancel_card_info["project"] && PROJECTS.dig(cancel_card_info["project"], "repo_path")) ||
            DEFAULT_PROJECT["repo_path"]
     Thread.new do
       run_cmd("fizzy", "reaction", "create", "--card", card_number_for_cancel.to_s,
@@ -255,9 +255,7 @@ def resolve_fizzy_project(card_info, card_internal_id, eventable)
       if project_result
         project_key, project_config = project_result
         card_info["project"] = project_key
-        map = load_work_item_map
-        map[card_internal_id] = card_info
-        save_work_item_map(map)
+        update_fizzy_work_item(card_internal_id, "project" => project_key)
         LOG.info "Backfilled project '#{project_key}' for card #{card_internal_id} in card map"
       else
         LOG.warn "No project found for card #{card_internal_id}"
@@ -307,18 +305,15 @@ def resolve_assigned_agent(card_info, card_internal_id, eventable, project_confi
 
   return nil unless webhook_agent
 
-  map = load_work_item_map
-  map[card_internal_id] ||= {}
-  map[card_internal_id]["agent"] = webhook_agent
   card_number = eventable.dig("card", "number")
-  map[card_internal_id]["number"] = card_number if card_number
-  save_work_item_map(map)
+  update_fizzy_work_item(card_internal_id, { "agent" => webhook_agent }.tap { |h| h["number"] = card_number if card_number })
   LOG.info "Backfilled agent '#{webhook_agent}' into card map for #{card_internal_id}"
   webhook_agent
 end
 
 def resolve_agent_via_api(card_info, card_internal_id, eventable, project_config)
   api_card_number = card_info&.dig("number") || eventable.dig("card", "number")
+  api_card_number ||= resolve_card_number(card_internal_id, repo_path: project_config["repo_path"])
   unless api_card_number
     LOG.warn "Cannot resolve agent via API — no card number available (internal_id: #{card_internal_id})"
     return nil
@@ -438,7 +433,7 @@ def handle_new_mention(ctx)
   card_title = card_data["title"] || "exploration"
 
   if card_number.nil?
-    map_entry = load_work_item_map[ctx.card_internal_id]
+    map_entry = lookup_fizzy_card_info(ctx.card_internal_id)
     card_number = if map_entry && map_entry["number"]
                     map_entry["number"]
                   else
@@ -464,12 +459,10 @@ def setup_new_mention_worktree(ctx, card_number, card_title)
   repo_path = ctx.project_config["repo_path"]
   worktree_path, branch = resolve_or_create_worktree(ctx, card_number, card_title, repo_path)
 
-  map = load_work_item_map
-  map[ctx.card_internal_id] = {
-    "number" => card_number, "branch" => branch, "worktree" => worktree_path,
-    "project" => ctx.project_key, "agent" => ctx.agent_name
-  }
-  save_work_item_map(map)
+  register_work_item(
+    branch: branch, worktree: worktree_path, project: ctx.project_key, agent: ctx.agent_name,
+    source: :fizzy, source_data: { "card_internal_id" => ctx.card_internal_id, "card_number" => card_number }
+  )
 
   [worktree_path, branch]
 end
@@ -570,12 +563,7 @@ end
 
 def resolve_and_save_card_number(card_internal_id, project_config)
   card_number = resolve_card_number(card_internal_id, repo_path: project_config["repo_path"])
-  if card_number
-    map = load_work_item_map
-    map[card_internal_id] ||= {}
-    map[card_internal_id]["number"] = card_number
-    save_work_item_map(map)
-  end
+  update_fizzy_work_item(card_internal_id, "number" => card_number) if card_number
   card_number
 end
 
@@ -583,10 +571,7 @@ def find_and_save_worktree(card_internal_id, card_number, project_config)
   found = find_worktree_for_card(card_number, repo_path: project_config["repo_path"])
   return nil unless found
 
-  map = load_work_item_map
-  map[card_internal_id] ||= {}
-  map[card_internal_id].merge!("worktree" => found[:worktree], "branch" => found[:branch])
-  save_work_item_map(map)
+  update_fizzy_work_item(card_internal_id, "worktree" => found[:worktree], "branch" => found[:branch])
   LOG.info "Found worktree by card number scan: #{found[:worktree]}"
   found[:worktree]
 end
@@ -658,7 +643,7 @@ end
 
 def resolve_or_create_worktree(ctx, card_number, card_title, repo_path)
   # Check for existing worktree in card map or on disk
-  existing_map_entry = load_work_item_map[ctx.card_internal_id]
+  existing_map_entry = lookup_fizzy_card_info(ctx.card_internal_id)
   if existing_map_entry && existing_map_entry["branch"] && existing_map_entry["worktree"] &&
      File.directory?(existing_map_entry["worktree"])
     LOG.info "Reusing existing worktree from card map: #{existing_map_entry["worktree"]}"

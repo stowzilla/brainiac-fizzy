@@ -50,6 +50,18 @@ def detect_planning_mode(text:, tags:, card_internal_id:, card_number:)
                                                          card_internal_id: card_internal_id, card_number: card_number)
 end
 
+def lookup_fizzy_card_info(card_internal_id)
+  Brainiac::Plugins::Fizzy::Helpers.lookup_fizzy_card_info(card_internal_id)
+end
+
+def update_fizzy_work_item(card_internal_id, updates)
+  Brainiac::Plugins::Fizzy::Helpers.update_fizzy_work_item(card_internal_id, updates)
+end
+
+def resolve_card_number(internal_id, repo_path:)
+  Brainiac::Plugins::Fizzy::Helpers.resolve_card_number(internal_id, repo_path: repo_path)
+end
+
 def verify_fizzy_signature!(request, payload_body, board_key: nil)
   Brainiac::Plugins::Fizzy::Helpers.verify_signature!(request, payload_body, board_key: board_key)
 end

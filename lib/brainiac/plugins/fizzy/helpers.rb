@@ -168,6 +168,91 @@ module Brainiac
             { card_id: card_number || card_internal_id }
           end
 
+          # Look up a Fizzy card's work item info by its internal ID.
+          # Returns a hash with top-level "number", "agent", "branch", "worktree", "project"
+          # keys for backward compatibility with handler code, or nil if not found.
+          def lookup_fizzy_card_info(card_internal_id)
+            return nil unless card_internal_id
+
+            result = find_work_item_by_card(card_internal_id)
+            return nil unless result
+
+            _work_item_id, info = result
+            # Ensure "number" is at top level for fizzy handler compat
+            info["number"] ||= info.dig("sources", "fizzy", "card_number")
+            info
+          end
+
+          # Update or create a work item entry for a Fizzy card.
+          # Accepts a hash of fields to merge into the existing entry.
+          # Handles both new-format (wi-xxx keyed) and creates new entries properly.
+          def update_fizzy_work_item(card_internal_id, updates)
+            return unless card_internal_id
+
+            map = load_work_item_map
+            result = nil
+            work_item_id = nil
+
+            # Find existing entry by card internal ID
+            map.each do |wid, info|
+              next unless info.is_a?(Hash)
+
+              fizzy_source = info.dig("sources", "fizzy")
+              next unless fizzy_source && fizzy_source["card_internal_id"] == card_internal_id
+
+              work_item_id = wid
+              result = info
+              break
+            end
+
+            card_number = updates.delete("number")
+
+            if result
+              result["sources"]["fizzy"]["card_number"] = card_number if card_number
+              result.merge!(updates)
+              map[work_item_id] = result
+            else
+              new_id = generate_work_item_id(branch: updates["branch"], card_number: card_number)
+              map[new_id] = {
+                "id" => new_id,
+                "branch" => updates["branch"],
+                "worktree" => updates["worktree"],
+                "project" => updates["project"],
+                "agent" => updates["agent"],
+                "sources" => {
+                  "fizzy" => {
+                    "card_internal_id" => card_internal_id,
+                    "card_number" => card_number
+                  }.compact
+                }
+              }.compact.merge(updates.except("branch", "worktree", "project", "agent"))
+            end
+
+            save_work_item_map(map)
+          end
+
+          # Resolve a card number from an internal ID by querying the Fizzy API.
+          # Searches card lists to find the matching card.
+          def resolve_card_number(internal_id, repo_path:)
+            env = default_fizzy_env
+            base_cmd = %w[fizzy card list]
+            ["--all", "--all --indexed-by closed"].each do |flags|
+              cmd = base_cmd + flags.split
+              output = run_cmd(*cmd, chdir: repo_path, env: env)
+              data = JSON.parse(output)["data"] || []
+              match = data.find { |c| c["id"] == internal_id }
+              if match
+                LOG.info "Resolved card number #{match["number"]} for internal_id #{internal_id}" if defined?(LOG)
+                return match["number"]
+              end
+            rescue StandardError
+              next
+            end
+
+            LOG.warn "Could not resolve card number for internal_id #{internal_id}" if defined?(LOG)
+            nil
+          end
+
           private
 
           def detect_branch_from_comment(body, card_number)
@@ -175,9 +260,12 @@ module Brainiac
             match = body.match(%r{<code>(fizzy-#{card_number}-[^<]+)</code>})
             return match[1] if match
 
-            # Fall back to card map
+            # Fall back to card map — check both new and old format
             map = load_work_item_map
-            entry = map.values.find { |v| v["number"].to_s == card_number.to_s }
+            entry = map.values.find do |v|
+              v.dig("sources", "fizzy", "card_number").to_s == card_number.to_s ||
+                v["number"].to_s == card_number.to_s
+            end
             entry&.dig("branch")
           end
 

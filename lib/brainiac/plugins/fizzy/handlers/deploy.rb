@@ -7,7 +7,7 @@
 
 def handle_deploy_comment(eventable, env_key, card_internal_id)
   comment_id = eventable["id"]
-  card_info = load_card_map[card_internal_id]
+  card_info = lookup_fizzy_card_info(card_internal_id)
 
   # Validate environment exists
   deploy_config = DEPLOYMENTS_CONFIG["environments"] || {}
@@ -139,10 +139,9 @@ def clone_branch_for_deploy(eventable, card_internal_id, card_info)
   end
 
   # Update card map
-  map = load_card_map
-  map[card_internal_id] ||= {}
-  map[card_internal_id].merge!("number" => card_number, "branch" => branch, "worktree" => worktree_path, "project" => project_key)
-  save_card_map(map)
+  update_fizzy_work_item(card_internal_id,
+                         "number" => card_number, "branch" => branch,
+                         "worktree" => worktree_path, "project" => project_key)
 
   LOG.info "[Deploy] Cloned branch #{branch} into worktree #{worktree_path} for card ##{card_number}"
   { worktree: worktree_path, card_number: card_number }

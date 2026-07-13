@@ -255,7 +255,10 @@ module Brainiac
               card_number = card["number"]
               next unless card_number
 
-              map_entry = map.values.find { |info| info["number"] == card_number }
+              map_entry = map.values.find do |info|
+                info.dig("sources", "fizzy", "card_number").to_s == card_number.to_s ||
+                  info["number"].to_s == card_number.to_s
+              end
               agent_name = map_entry["agent"] if map_entry
               env = Helpers.fizzy_env_for(agent_name || AI_AGENT_NAME)
 
@@ -267,8 +270,8 @@ module Brainiac
                                                        primary_worktree: map_entry&.dig("worktree"), primary_branch: map_entry&.dig("branch"))
 
               if map_entry
-                internal_id = map.key(map_entry)
-                map.delete(internal_id)
+                work_item_id = map.key(map_entry)
+                map.delete(work_item_id)
               end
 
               closed << { number: card_number, url: card["url"], title: card["title"] }
