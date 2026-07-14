@@ -503,7 +503,8 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
              LOG.info "[Resume] Using lean prompt for follow-up on card #{card_number || ctx.card_internal_id}"
              render_resume_prompt(
                comment_body: ctx.plain_text, comment_creator: ctx.comment_vars["COMMENT_CREATOR"],
-               comment_id: ctx.comment_id, card_number: card_number, agent_name: ctx.agent_name
+               comment_id: ctx.comment_id, card_number: card_number, agent_name: ctx.agent_name,
+               response_destination: "Post your response as a comment on Fizzy card ##{card_number}. Do NOT post on the GitHub PR."
              )
            else
              build_followup_prompt(ctx, card_number, card_tags, work_dir)
