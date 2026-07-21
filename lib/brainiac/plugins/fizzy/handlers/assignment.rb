@@ -46,11 +46,23 @@ def handle_card_assigned(payload)
   react_to_assignment(card_number, repo_path, assigned_agent)
   worktree_path = setup_assigned_worktree(repo_path, branch, card_internal_id, card_number, project_key, assigned_agent)
 
+  initial_cli = detect_cli_provider(tags: tags)
+  initial_model = detect_model(project_config, tags: tags)
+  initial_effort = detect_effort(project_config, tags: tags)
+
+  # Persist initial overrides from card tags to the work item
+  resolve_work_item_overrides(
+    branch: branch,
+    inline_cli_provider: initial_cli,
+    inline_model: initial_model,
+    inline_effort: initial_effort
+  )
+
   dispatch_assigned_card(
     card_number: card_number, card_internal_id: card_internal_id, title: title, tags: tags,
     branch: branch, worktree_path: worktree_path, project_config: project_config, project_key: project_key,
-    agent_name: assigned_agent, model: detect_model(project_config, tags: tags),
-    effort: detect_effort(project_config, tags: tags), cli_provider_override: detect_cli_provider(tags: tags)
+    agent_name: assigned_agent, model: initial_model,
+    effort: initial_effort, cli_provider_override: initial_cli
   )
 end
 

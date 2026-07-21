@@ -91,16 +91,39 @@ def build_comment_context(eventable:, plain_text:, tags:, card_internal_id:, car
   card_tags = eventable.dig("card", "tags") || []
   clean_text = tags[:clean_text]
 
+  inline_cli = detect_cli_provider(text: plain_text, tags: card_tags)
+  inline_model = detect_model(project_config, text: plain_text)
+  inline_effort = detect_effort(project_config, tags: card_tags, text: plain_text)
+
+  # Resolve overrides against the work item — merges stored overrides with inline tags
+  # and persists any new inline tags for future dispatches.
+  branch = card_info["branch"] if card_info.is_a?(Hash)
+  if branch
+    resolved = resolve_work_item_overrides(
+      branch: branch,
+      inline_cli_provider: inline_cli,
+      inline_model: inline_model,
+      inline_effort: inline_effort
+    )
+    effective_cli = resolved[:cli_provider]
+    effective_model = resolved[:model]
+    effective_effort = resolved[:effort]
+  else
+    effective_cli = inline_cli
+    effective_model = inline_model
+    effective_effort = inline_effort
+  end
+
   CommentContext.new(
     eventable: eventable, plain_text: clean_text, card_internal_id: card_internal_id,
     card_info: card_info, comment_id: comment_id, creator_name: creator_name,
     creator_is_agent: creator_is_agent, mentioned_agent: mentioned_agent,
     agent_name: agent_name, is_cross_agent_mention: is_cross_agent_mention,
     project_config: project_config, project_key: project_key,
-    model: detect_model(project_config, text: plain_text),
-    effort: detect_effort(project_config, tags: card_tags, text: plain_text),
+    model: effective_model,
+    effort: effective_effort,
     deploy_intent: deploy_intent,
-    cli_provider_override: detect_cli_provider(text: plain_text, tags: card_tags),
+    cli_provider_override: effective_cli,
     card_tags: card_tags,
     worktree_override: resolve_worktree_override(tags, project_config),
     comment_vars: {
