@@ -110,6 +110,11 @@ def save_work_item_map(_map) = nil
 def find_work_item_by_card(_card_internal_id) = nil
 def register_work_item(**) = "wi-test-#{SecureRandom.hex(4)}"
 def generate_work_item_id(**) = "wi-test-#{SecureRandom.hex(4)}"
+
+def resolve_work_item_overrides(work_item_id: nil, branch: nil, inline_cli_provider: nil, inline_model: nil, inline_effort: nil)
+  { cli_provider: inline_cli_provider, model: inline_model, effort: inline_effort }
+end
+
 def slugify(text, **) = text.downcase.gsub(/[^a-z0-9]+/, "-")[0..30]
 def record_self_move(_num) = nil
 
