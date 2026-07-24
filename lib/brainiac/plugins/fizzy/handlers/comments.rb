@@ -17,7 +17,7 @@ CommentContext = Struct.new(
   :mentioned_agent, :agent_name, :is_cross_agent_mention,
   :project_config, :project_key, :card_number, :worktree,
   :model, :effort, :deploy_intent, :cli_provider_override,
-  :comment_vars, :card_tags, :worktree_override,
+  :comment_vars, :card_tags, :worktree_override, :fresh,
   keyword_init: true
 )
 
@@ -126,6 +126,7 @@ def build_comment_context(eventable:, plain_text:, tags:, card_internal_id:, car
     cli_provider_override: effective_cli,
     card_tags: card_tags,
     worktree_override: resolve_worktree_override(tags, project_config),
+    fresh: tags[:fresh],
     comment_vars: {
       "COMMENT_CREATOR" => creator_name || "Unknown",
       "COMMENT_ID" => comment_id.to_s,
@@ -517,10 +518,14 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
   effort = detect_effort(ctx.project_config, tags: card_tags, text: ctx.plain_text)
 
   is_worktree = work_dir != ctx.project_config["repo_path"]
-  should_resume = is_worktree && resume_viable?(
+  should_resume = is_worktree && !ctx.fresh && resume_viable?(
     project_config: ctx.project_config, cli_provider: ctx.cli_provider_override,
     agent_name: ctx.agent_name, chdir: work_dir
   )
+
+  if ctx.fresh && is_worktree
+    LOG.info "[Fizzy] [fresh] tag — forcing new session instead of resuming on card #{card_number || ctx.card_internal_id}"
+  end
 
   prompt = if should_resume
              LOG.info "[Resume] Using lean prompt for follow-up on card #{card_number || ctx.card_internal_id}"
