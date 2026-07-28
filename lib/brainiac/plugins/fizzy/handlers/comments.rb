@@ -70,6 +70,21 @@ def handle_comment(payload)
     project_config: project_config, project_key: project_key
   )
 
+  # --- Intent gate (mirrors brainiac-discord pattern) ---
+  # "Directly addressed" for Fizzy: agent is assigned to the card OR explicitly @mentioned.
+  # All current dispatch paths satisfy one of these, so intent is always bypassed today.
+  # This infrastructure supports future scenarios where agents observe cards they aren't
+  # assigned to or mentioned on (ambient watchers).
+  directly_addressed = mentioned_agent || (card_info && card_info["agent"]&.downcase == agent_name.downcase)
+  unless directly_addressed
+    card_number_for_intent = card_info&.dig("number") || eventable.dig("card", "number")
+    intent_ctx = card_number_for_intent ? fetch_intent_context(card_number_for_intent, repo_path: project_config["repo_path"], agent_name: agent_name) : nil
+    if intent_skip?(ctx.plain_text, agent_name: agent_name, source: :fizzy,
+                    channel: "Fizzy card ##{card_number_for_intent || card_internal_id}", context: intent_ctx)
+      return [200, { status: "intent_skip", agent: agent_name }.to_json]
+    end
+  end
+
   # --- Route to appropriate sub-handler ---
   if is_cross_agent_mention
     handle_cross_agent_mention(ctx)
