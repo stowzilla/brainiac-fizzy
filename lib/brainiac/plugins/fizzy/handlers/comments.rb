@@ -386,17 +386,14 @@ def dispatch_cross_agent_review(ctx, card_key:, card_number:, card_assigned_agen
   review_worktree_path, review_branch = setup_cross_agent_worktree(ctx, card_number)
   prompt = build_cross_agent_prompt(ctx, card_number, card_assigned_agent, review_worktree_path, review_branch)
 
-  intent_ctx = fetch_intent_context(card_number, repo_path: ctx.project_config["repo_path"], agent_name: ctx.agent_name)
   pid, log_file = run_agent(prompt,
                             project_config: ctx.project_config, chdir: review_worktree_path,
                             log_name: "review-#{ctx.agent_name.downcase}-#{card_number || ctx.card_internal_id}",
                             model: ctx.model, effort: ctx.effort, agent_name: ctx.agent_name,
                             card_number: card_number, comment_id: ctx.comment_id,
                             source: :fizzy, source_context: { card_number: card_number },
-                            cli_provider: ctx.cli_provider_override,
-                            message: ctx.plain_text, channel: "Fizzy comment",
-                            context: intent_ctx)
-  return [200, { status: "intent_skip", agent: ctx.agent_name, card: card_number }.to_json] unless pid
+                            cli_provider: ctx.cli_provider_override)
+  return [200, { status: "dispatch_failed", agent: ctx.agent_name, card: card_number }.to_json] unless pid
 
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: ctx.agent_name)
 
@@ -494,17 +491,14 @@ end
 def dispatch_new_mention(ctx, card_key:, card_number:, card_title:, branch:, worktree_path:)
   prompt = build_mention_prompt(ctx, card_number, card_title, branch, worktree_path)
 
-  intent_ctx = fetch_intent_context(card_number, repo_path: ctx.project_config["repo_path"], agent_name: ctx.agent_name)
   pid, log_file = run_agent(prompt,
                             project_config: ctx.project_config, chdir: worktree_path,
                             log_name: "mention-#{card_number || ctx.card_internal_id}",
                             model: ctx.model, effort: ctx.effort, agent_name: ctx.agent_name,
                             card_number: card_number, comment_id: ctx.comment_id,
                             source: :fizzy, cli_provider: ctx.cli_provider_override,
-                            source_context: { card_number: card_number },
-                            message: ctx.plain_text, channel: "Fizzy comment",
-                            context: intent_ctx)
-  return [200, { status: "intent_skip", agent: ctx.agent_name, card: card_number }.to_json] unless pid
+                            source_context: { card_number: card_number })
+  return [200, { status: "dispatch_failed", agent: ctx.agent_name, card: card_number }.to_json] unless pid
 
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: ctx.agent_name)
 
@@ -537,7 +531,6 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
              build_followup_prompt(ctx, card_number, card_tags, work_dir)
            end
 
-  intent_ctx = fetch_intent_context(card_number, repo_path: ctx.project_config["repo_path"], agent_name: ctx.agent_name)
   pid, log_file = run_agent(prompt,
                             project_config: ctx.project_config, chdir: work_dir,
                             log_name: "followup-#{card_number || ctx.card_internal_id}",
@@ -547,10 +540,8 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
                             source_context: {
                               card_number: card_number, card_internal_id: ctx.card_internal_id,
                               deploy_intent: ctx.deploy_intent
-                            },
-                            message: ctx.plain_text, channel: "Fizzy comment",
-                            context: intent_ctx)
-  return [200, { status: "intent_skip", agent: ctx.agent_name, card: card_number }.to_json] unless pid
+                            })
+  return [200, { status: "dispatch_failed", agent: ctx.agent_name, card: card_number }.to_json] unless pid
 
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: ctx.agent_name)
 
