@@ -1,0 +1,24 @@
+name: Yank Gem Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to yank (e.g., 0.0.11)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  yank:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - name: Yank gem
+        run: gem yank brainiac-fizzy -v ${{ inputs.version }}
+        env:
+          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
