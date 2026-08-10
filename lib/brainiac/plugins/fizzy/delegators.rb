@@ -174,12 +174,7 @@ def render_planning_prompt(situation_template, vars = {}, brain_context: "", car
     planning_vars[var_name] ||= (board_key && board_column_id(board_key, col_name)) || default_id
   end
 
-  # Touch memory file if CARD_ID is present — ensures file exists before agent tries to read it
-  if vars["CARD_ID"]
-    memory_file = File.join(planning_vars["MEMORY_DIR"], "card-#{vars["CARD_ID"]}.md")
-    FileUtils.mkdir_p(planning_vars["MEMORY_DIR"])
-    FileUtils.touch(memory_file)
-  end
+  ensure_memory_file_exists!(vars["CARD_ID"], planning_vars["MEMORY_DIR"])
 
   roster = agent_roster
   roster_lines = roster.map { |_key, display| "  - @#{display}" }.join("\n")
@@ -187,6 +182,15 @@ def render_planning_prompt(situation_template, vars = {}, brain_context: "", car
 
   planning_vars.each { |key, val| result.gsub!("{{#{key}}}", val.to_s) }
   result
+end
+
+# Ensure a card's memory file exists so the agent can read it without error.
+def ensure_memory_file_exists!(card_id, memory_dir)
+  return unless card_id
+
+  memory_file = File.join(memory_dir, "card-#{card_id}.md")
+  FileUtils.mkdir_p(memory_dir)
+  FileUtils.touch(memory_file)
 end
 
 # Config constants — handler files reference these as top-level constants.
