@@ -149,7 +149,8 @@ def render_planning_prompt(situation_template, vars = {}, brain_context: "", car
   result += card_context unless card_context.empty?
   result += PROMPT_CORE
   result += PROMPT_PLANNING_MODE.gsub("{{PLAN_FILE}}", plan_file)
-  result += CHANNEL_PROMPTS.fetch(channel, PROMPT_FIZZY_CHANNEL)
+  plugin_prompt = Brainiac.channel_prompts[channel]
+  result += plugin_prompt || CHANNEL_PROMPTS.fetch(channel, "")
   result += situation_template
 
   # Pre-post comment check (same as render_prompt)
