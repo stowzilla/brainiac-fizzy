@@ -78,9 +78,11 @@ def handle_comment(payload)
   directly_addressed = mentioned_agent || (card_info && card_info["agent"]&.downcase == agent_name.downcase)
   unless directly_addressed
     card_number_for_intent = card_info&.dig("number") || eventable.dig("card", "number")
-    intent_ctx = card_number_for_intent ? fetch_intent_context(card_number_for_intent, repo_path: project_config["repo_path"], agent_name: agent_name) : nil
+    intent_ctx = if card_number_for_intent
+                   fetch_intent_context(card_number_for_intent, repo_path: project_config["repo_path"], agent_name: agent_name)
+                 end
     if intent_skip?(ctx.plain_text, agent_name: agent_name, source: :fizzy,
-                    channel: "Fizzy card ##{card_number_for_intent || card_internal_id}", context: intent_ctx)
+                                    channel: "Fizzy card ##{card_number_for_intent || card_internal_id}", context: intent_ctx)
       return [200, { status: "intent_skip", agent: agent_name }.to_json]
     end
   end
@@ -532,9 +534,7 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
     agent_name: ctx.agent_name, chdir: work_dir
   )
 
-  if ctx.fresh && is_worktree
-    LOG.info "[Fizzy] [fresh] tag — forcing new session instead of resuming on card #{card_number || ctx.card_internal_id}"
-  end
+  LOG.info "[Fizzy] [fresh] — forcing new session instead of resuming on card #{card_number || ctx.card_internal_id}" if ctx.fresh && is_worktree
 
   prompt = if should_resume
              LOG.info "[Resume] Using lean prompt for follow-up on card #{card_number || ctx.card_internal_id}"
