@@ -136,6 +136,14 @@ PROMPT_MENTION = Brainiac::Plugins::Fizzy::Prompts::MENTION
 PROMPT_CROSS_AGENT_REVIEW = Brainiac::Plugins::Fizzy::Prompts::CROSS_AGENT_REVIEW
 PROMPT_PLANNING_MODE = Brainiac::Plugins::Fizzy::Prompts::PLANNING_MODE
 
+# Default Fizzy board column IDs — used as fallback when board_key is nil or
+# the board config doesn't specify column mappings.
+DEFAULT_COLUMN_IDS = {
+  "right_now" => "03f5xa5q9fog9592pa1279dts",
+  "needs_review" => "03f5ykobhpsd78hbuvajtn8g8",
+  "uat" => "03fsmglsr6az06ppyotawsti8"
+}.freeze
+
 # Render planning mode prompt — identical to render_prompt but inserts the planning
 # instructions between PROMPT_CORE and the channel rules. This was originally defined
 # in brainiac core's planning.rb but belongs here after the fizzy extraction.
