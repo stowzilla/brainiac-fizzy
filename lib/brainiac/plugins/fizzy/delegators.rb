@@ -153,11 +153,9 @@ def render_planning_prompt(situation_template, vars = {}, brain_context: "", car
   result += plugin_prompt || CHANNEL_PROMPTS.fetch(channel, "")
   result += situation_template
 
-  # Pre-post comment check (same as render_prompt)
-  case channel
-  when :fizzy   then result += PROMPT_PRE_POST_CHECK_FIZZY
-  when :github  then result += PROMPT_PRE_POST_CHECK_GITHUB
-  end
+  # Pre-post comment check (same as render_prompt — use plugin-registered lookup)
+  plugin_pre_post = Brainiac.channel_pre_post_checks[channel]
+  result += plugin_pre_post if plugin_pre_post
 
   result += PROMPT_REFLECTION
 
