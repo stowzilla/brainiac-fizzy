@@ -134,6 +134,59 @@ PROMPT_FOLLOWUP_WORKTREE = Brainiac::Plugins::Fizzy::Prompts::FOLLOWUP_WORKTREE
 PROMPT_FOLLOWUP_NO_WORKTREE = Brainiac::Plugins::Fizzy::Prompts::FOLLOWUP_NO_WORKTREE
 PROMPT_MENTION = Brainiac::Plugins::Fizzy::Prompts::MENTION
 PROMPT_CROSS_AGENT_REVIEW = Brainiac::Plugins::Fizzy::Prompts::CROSS_AGENT_REVIEW
+PROMPT_PLANNING_MODE = Brainiac::Plugins::Fizzy::Prompts::PLANNING_MODE
+
+# Render planning mode prompt — identical to render_prompt but inserts the planning
+# instructions between PROMPT_CORE and the channel rules. This was originally defined
+# in brainiac core's planning.rb but belongs here after the fizzy extraction.
+def render_planning_prompt(situation_template, vars = {}, brain_context: "", card_context: "", agent_name: AI_AGENT_NAME,
+                           channel: :fizzy, board_key: nil)
+  plans_dir = Brainiac::Plugins::Fizzy::Planning::PLANS_DIR
+  plan_file = File.join(plans_dir, "card-#{vars["CARD_ID"]}-plan.md")
+
+  result = ""
+  result += "#{brain_context}\n" unless brain_context.empty?
+  result += card_context unless card_context.empty?
+  result += PROMPT_CORE
+  result += PROMPT_PLANNING_MODE.gsub("{{PLAN_FILE}}", plan_file)
+  result += CHANNEL_PROMPTS.fetch(channel, PROMPT_FIZZY_CHANNEL)
+  result += situation_template
+
+  # Pre-post comment check (same as render_prompt)
+  case channel
+  when :fizzy   then result += PROMPT_PRE_POST_CHECK_FIZZY
+  when :github  then result += PROMPT_PRE_POST_CHECK_GITHUB
+  end
+
+  result += PROMPT_REFLECTION
+
+  planning_vars = vars.merge("PLAN_FILE" => plan_file)
+  planning_vars["KNOWLEDGE_DIR"] ||= KNOWLEDGE_DIR
+  planning_vars["MEMORY_DIR"] ||= memory_dir_for(agent_name)
+  planning_vars["PERSONA_DIR"] ||= persona_dir_for(agent_name)
+  planning_vars["PERSONA_COLLECTION"] ||= persona_collection_for(agent_name)
+  planning_vars["AGENT_NAME"] ||= agent_name
+
+  # Populate column IDs from board config, falling back to defaults
+  DEFAULT_COLUMN_IDS.each do |col_name, default_id|
+    var_name = "#{col_name.upcase}_COLUMN_ID"
+    planning_vars[var_name] ||= (board_key && board_column_id(board_key, col_name)) || default_id
+  end
+
+  # Touch memory file if CARD_ID is present — ensures file exists before agent tries to read it
+  if vars["CARD_ID"]
+    memory_file = File.join(planning_vars["MEMORY_DIR"], "card-#{vars["CARD_ID"]}.md")
+    FileUtils.mkdir_p(planning_vars["MEMORY_DIR"])
+    FileUtils.touch(memory_file)
+  end
+
+  roster = agent_roster
+  roster_lines = roster.map { |_key, display| "  - @#{display}" }.join("\n")
+  planning_vars["AGENT_ROSTER"] ||= roster_lines
+
+  planning_vars.each { |key, val| result.gsub!("{{#{key}}}", val.to_s) }
+  result
+end
 
 # Config constants — handler files reference these as top-level constants.
 # These are evaluated after Config.load! has been called (during plugin register).
