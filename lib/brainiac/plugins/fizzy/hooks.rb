@@ -43,9 +43,9 @@ module Brainiac
               end
 
               found_comment = Helpers.append_fizzy_comment_footer(card_number,
-                                                                   project_config: ctx[:project_config],
-                                                                   agent_name: ctx[:agent_name],
-                                                                   since: ctx[:source_context]&.dig(:dispatched_at))
+                                                                  project_config: ctx[:project_config],
+                                                                  agent_name: ctx[:agent_name],
+                                                                  since: ctx[:source_context]&.dig(:dispatched_at))
 
               # If the agent didn't post any comment during this session, re-dispatch to summarize from memory.
               # Uses dispatched_at from source_context to only check for comments made during THIS session,

@@ -1,14 +1,14 @@
 # AGENTS.md
 
-## Pre-PR Checklist
+## Pre-Push Checklist (MANDATORY)
 
-Before opening or updating a pull request, agents MUST:
+Before EVERY push — whether opening a new PR or pushing follow-up commits — agents MUST:
 
 1. **Run rubocop** — `bundle exec rubocop` must pass with zero offenses.
 2. **Run tests** — `bundle exec rake test` must pass with no failures.
 3. **Fix, don't suppress** — if rubocop raises an offense, fix the code. Only add exclusions to `.rubocop.yml` when the rule fundamentally conflicts with the file's purpose (e.g., a registration hub exceeding module length).
 
-If either step fails, fix the issues before pushing.
+If either step fails, fix the issues before pushing. This applies to every commit pushed to a PR, not just the initial one.
 
 ## Project Conventions
 
