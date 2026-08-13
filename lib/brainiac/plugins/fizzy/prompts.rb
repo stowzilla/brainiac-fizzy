@@ -55,7 +55,9 @@ module Brainiac
           You have been assigned Fizzy card #{{CARD_NUMBER}}: "{{CARD_TITLE}}".
           You are on branch "{{BRANCH}}" in a fresh worktree.
           Implement the task, commit, push, and open a PR (link back to Fizzy).
-          When you're done, post a comment on the card with a concise summary, PR link, and branch name.
+
+          **Response destination: Post your response as a comment on Fizzy card #{{CARD_NUMBER}}.**
+          Your comment MUST include a concise summary of what you did, a PR link, and the branch name.
 
           **MANDATORY: Always include the branch name in your comment.** Use this format:
           `<p><strong>Branch:</strong> <code>{{BRANCH}}</code></p>`
@@ -109,6 +111,18 @@ module Brainiac
           Respond to what's being asked — code review, opinion, debugging help, or sanity check.
 
           **IMPORTANT: Do NOT @mention any other agents in your response.**
+        PROMPT
+
+        SUMMARIZE_WORK = <<~'PROMPT'
+          You completed work on Fizzy card #{{CARD_NUMBER}} ("{{CARD_TITLE}}") but did not post a comment.
+          Read your memory file for this card and write a brief summary comment.
+
+          **Response destination: Post your response as a comment on Fizzy card #{{CARD_NUMBER}}.**
+          Include what you did, any PR link, and the branch name.
+          Keep it concise — this is a summary, not a full report.
+
+          **MANDATORY: Always include the branch name in your comment.** Use this format:
+          `<p><strong>Branch:</strong> <code>{{BRANCH}}</code></p>`
         PROMPT
 
         UAT_TESTING = <<~'PROMPT'
