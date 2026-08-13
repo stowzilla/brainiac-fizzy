@@ -44,6 +44,10 @@ module Brainiac
 
           # Check if the agent posted a comment on the card since a given time.
           # If no `since` is provided, checks for any agent comment (legacy behavior).
+          # Subtracts a 30s buffer from `since` to account for clock skew between
+          # the local server and the Fizzy API.
+          CLOCK_SKEW_BUFFER = 30
+
           def agent_commented_on_card?(card_number, agent_name, repo_path:, since: nil)
             env = Helpers.fizzy_env_for(agent_name)
             output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, chdir: repo_path, env: env)
@@ -53,9 +57,10 @@ module Brainiac
             agent_comments = comments.select { |c| c["creator_name"]&.downcase == agent_display.downcase }
             return agent_comments.any? unless since
 
+            buffered_since = since - CLOCK_SKEW_BUFFER
             agent_comments.any? do |c|
               comment_time = c["created_at"] && Time.parse(c["created_at"])
-              comment_time && comment_time > since
+              comment_time && comment_time > buffered_since
             end
           rescue StandardError
             false

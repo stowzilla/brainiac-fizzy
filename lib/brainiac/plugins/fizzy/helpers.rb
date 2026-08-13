@@ -102,7 +102,7 @@ module Brainiac
             run_cmd("fizzy", "card", "column", card_number.to_s, "--column", column_id, chdir: repo_path, env: env)
           end
 
-          def append_fizzy_comment_footer(card_number, project_config:, agent_name: nil)
+          def append_fizzy_comment_footer(card_number, project_config:, agent_name: nil, since: nil)
             repo_path = project_config["repo_path"]
             env = fizzy_env_for(agent_name || AI_AGENT_NAME)
 
@@ -110,29 +110,40 @@ module Brainiac
             comments = JSON.parse(output)["data"] || []
             agent_display = agent_display_name(agent_name || AI_AGENT_NAME)
 
-            last_agent_comment = comments.reverse.find do |c|
-              c["creator_name"]&.downcase == agent_display.downcase
+            # Find the most recent agent comment, scoped to this session if `since` is provided.
+            # Subtracts 30s buffer from `since` to account for clock skew between local server and Fizzy API.
+            agent_comments = comments.select { |c| c["creator_name"]&.downcase == agent_display.downcase }
+            if since
+              buffered_since = since - 30
+              agent_comments = agent_comments.select do |c|
+                comment_time = c["created_at"] && Time.parse(c["created_at"])
+                comment_time && comment_time > buffered_since
+              end
             end
-            return unless last_agent_comment
 
-            # Check if footer already exists
+            last_agent_comment = agent_comments.last
+            return false unless last_agent_comment
+
+            # Append footer if applicable
             body = last_agent_comment.dig("body", "html") || ""
-            return if body.include?("<em>Branch:")
+            unless body.include?("<em>Branch:")
+              branch = detect_branch_from_comment(body, card_number)
+              if branch
+                pr_url = detect_pr_url(branch, project_config)
+                footer = "<p><em>Branch: <code>#{branch}</code>"
+                footer += " | <a href=\"#{pr_url}\">PR</a>" if pr_url
+                footer += "</em></p>"
 
-            # Detect branch from comment content or card map
-            branch = detect_branch_from_comment(body, card_number)
-            return unless branch
+                updated_body = body + footer
+                run_cmd("fizzy", "comment", "update", last_agent_comment["id"], "--card", card_number.to_s,
+                        "--body", updated_body, chdir: repo_path, env: env)
+              end
+            end
 
-            pr_url = detect_pr_url(branch, project_config)
-            footer = "<p><em>Branch: <code>#{branch}</code>"
-            footer += " | <a href=\"#{pr_url}\">PR</a>" if pr_url
-            footer += "</em></p>"
-
-            updated_body = body + footer
-            run_cmd("fizzy", "comment", "update", last_agent_comment["id"], "--card", card_number.to_s,
-                    "--body", updated_body, chdir: repo_path, env: env)
+            true
           rescue StandardError => e
             LOG.warn "[Fizzy] Could not append footer to card ##{card_number}: #{e.message}" if defined?(LOG)
+            false
           end
 
           def ensure_fizzy_yaml!(chdir, project_config)
