@@ -33,8 +33,8 @@ def move_card_to_column(card_number, column_name, project_config:, agent_name: n
   Brainiac::Plugins::Fizzy::Helpers.move_card_to_column(card_number, column_name, project_config: project_config, agent_name: agent_name)
 end
 
-def append_fizzy_comment_footer(card_number, project_config:, agent_name: nil)
-  Brainiac::Plugins::Fizzy::Helpers.append_fizzy_comment_footer(card_number, project_config: project_config, agent_name: agent_name)
+def append_fizzy_comment_footer(card_number, project_config:, agent_name: nil, since: nil)
+  Brainiac::Plugins::Fizzy::Helpers.append_fizzy_comment_footer(card_number, project_config: project_config, agent_name: agent_name, since: since)
 end
 
 def ensure_fizzy_yaml!(chdir, project_config)

@@ -42,17 +42,16 @@ module Brainiac
                 record_self_move(card_number)
               end
 
-              Helpers.append_fizzy_comment_footer(card_number,
-                                                  project_config: ctx[:project_config],
-                                                  agent_name: ctx[:agent_name])
+              found_comment = Helpers.append_fizzy_comment_footer(card_number,
+                                                                  project_config: ctx[:project_config],
+                                                                  agent_name: ctx[:agent_name],
+                                                                  since: ctx[:source_context]&.dig(:dispatched_at))
 
               # If the agent didn't post any comment during this session, re-dispatch to summarize from memory.
               # Uses dispatched_at from source_context to only check for comments made during THIS session,
               # not previous sessions on the same card.
-              if !ctx[:source_context]&.dig(:skip_summarize_redispatch) &&
-                 !agent_commented_on_card?(card_number, ctx[:agent_name],
-                                           repo_path: ctx[:project_config]["repo_path"],
-                                           since: ctx[:source_context]&.dig(:dispatched_at))
+              if !found_comment &&
+                 !ctx[:source_context]&.dig(:skip_summarize_redispatch)
                 dispatch_summarize_session(ctx)
               end
 
