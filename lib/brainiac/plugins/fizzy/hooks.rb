@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "time"
+
 module Brainiac
   module Plugins
     module Fizzy
@@ -25,6 +27,7 @@ module Brainiac
           private
 
           # After an agent session completes — move card to needs_review, append footer
+          # If the agent didn't post a comment, re-dispatch for a summary.
           def register_agent_completed
             Brainiac.on(:agent_completed) do |ctx|
               next unless ctx[:source] == :fizzy
@@ -42,6 +45,16 @@ module Brainiac
               Helpers.append_fizzy_comment_footer(card_number,
                                                   project_config: ctx[:project_config],
                                                   agent_name: ctx[:agent_name])
+
+              # If the agent didn't post any comment during this session, re-dispatch to summarize from memory.
+              # Uses dispatched_at from source_context to only check for comments made during THIS session,
+              # not previous sessions on the same card.
+              if !ctx[:source_context]&.dig(:skip_summarize_redispatch) &&
+                 !agent_commented_on_card?(card_number, ctx[:agent_name],
+                                           repo_path: ctx[:project_config]["repo_path"],
+                                           since: ctx[:source_context]&.dig(:dispatched_at))
+                dispatch_summarize_session(ctx)
+              end
 
               # Planning mode finalization
               Planning.finalize_if_needed(ctx[:prompt_file], ctx[:agent_name], ctx[:project_config])
@@ -240,11 +253,26 @@ module Brainiac
 
             pid, log_file = run_agent(prompt, project_config: project_config, chdir: repo_path,
                                               log_name: "uat-#{card_number}", agent_name: agent_name,
-                                              source: :fizzy, source_context: { card_number: card_number }, skip_column_move: true)
+                                              source: :fizzy,
+                                              source_context: { card_number: card_number, dispatched_at: Time.now },
+                                              skip_column_move: true)
             register_session("card-#{card_number}", pid, log_file: log_file, agent_name: agent_name)
             LOG.info "[Fizzy] Dispatched #{agent_name} for UAT on card ##{card_number}" if defined?(LOG)
           rescue StandardError => e
             LOG.error "[Fizzy] Failed to dispatch UAT agent: #{e.message}" if defined?(LOG)
+          end
+
+          # Delegated to Summarize module for manageable file length.
+          def dispatch_summarize_session(ctx)
+            Summarize.dispatch_summarize_session(ctx)
+          end
+
+          def agent_commented_on_card?(card_number, agent_name, repo_path:, since: nil)
+            Summarize.agent_commented_on_card?(card_number, agent_name, repo_path: repo_path, since: since)
+          end
+
+          def post_fallback_comment(card_number, branch, agent_name, project_config)
+            Summarize.post_fallback_comment(card_number, branch, agent_name, project_config)
           end
 
           def close_uat_cards(card_list, repo_path)

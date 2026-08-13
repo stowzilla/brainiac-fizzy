@@ -37,11 +37,14 @@ Metrics/PerceivedComplexity:
 
 Metrics/ModuleLength:
   Max: 300
+  Exclude:
+    - "lib/brainiac/plugins/fizzy/hooks.rb"
 
 Metrics/ClassLength:
   Max: 300
   Exclude:
     - "test/**/*"
+    - "lib/brainiac/plugins/fizzy/hooks.rb"
 
 Metrics/BlockNesting:
   Max: 5

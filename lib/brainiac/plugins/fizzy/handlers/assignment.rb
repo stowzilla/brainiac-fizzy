@@ -152,7 +152,7 @@ def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branc
                             project_config: project_config, chdir: worktree_path,
                             log_name: "assigned-#{card_number}", model: model, effort: effort,
                             agent_name: agent_name, card_number: card_number, source: :fizzy,
-                            source_context: { card_number: card_number },
+                            source_context: { card_number: card_number, dispatched_at: Time.now },
                             cli_provider: cli_provider_override)
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: agent_name)
 
