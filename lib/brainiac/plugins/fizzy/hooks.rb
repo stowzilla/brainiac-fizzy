@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "time"
+
 module Brainiac
   module Plugins
     module Fizzy
@@ -44,10 +46,13 @@ module Brainiac
                                                   project_config: ctx[:project_config],
                                                   agent_name: ctx[:agent_name])
 
-              # If the agent didn't post any comment, re-dispatch to summarize from memory.
+              # If the agent didn't post any comment during this session, re-dispatch to summarize from memory.
+              # Uses dispatched_at from source_context to only check for comments made during THIS session,
+              # not previous sessions on the same card.
               if !ctx[:source_context]&.dig(:skip_summarize_redispatch) &&
                  !agent_commented_on_card?(card_number, ctx[:agent_name],
-                                           repo_path: ctx[:project_config]["repo_path"])
+                                           repo_path: ctx[:project_config]["repo_path"],
+                                           since: ctx[:source_context]&.dig(:dispatched_at))
                 dispatch_summarize_session(ctx)
               end
 
@@ -248,7 +253,7 @@ module Brainiac
 
             pid, log_file = run_agent(prompt, project_config: project_config, chdir: repo_path,
                                               log_name: "uat-#{card_number}", agent_name: agent_name,
-                                              source: :fizzy, source_context: { card_number: card_number }, skip_column_move: true)
+                                              source: :fizzy, source_context: { card_number: card_number, dispatched_at: Time.now }, skip_column_move: true)
             register_session("card-#{card_number}", pid, log_file: log_file, agent_name: agent_name)
             LOG.info "[Fizzy] Dispatched #{agent_name} for UAT on card ##{card_number}" if defined?(LOG)
           rescue StandardError => e
@@ -263,6 +268,7 @@ module Brainiac
             agent_name = ctx[:agent_name]
             project_config = ctx[:project_config]
             repo_path = project_config["repo_path"]
+            session_started_at = ctx[:source_context]&.dig(:dispatched_at)
 
             map = load_work_item_map
             work_item = map.values.find do |info|
@@ -311,13 +317,13 @@ module Brainiac
 
                 sleep 2 # Brief pause to let any comment propagate
 
-                unless agent_commented_on_card?(card_number, agent_name, repo_path: repo_path)
+                unless agent_commented_on_card?(card_number, agent_name, repo_path: repo_path, since: session_started_at)
                   post_fallback_comment(card_number, branch, agent_name, project_config)
                 end
               rescue Errno::ECHILD
                 # Process already reaped by session manager — check for comment
                 sleep 2
-                unless agent_commented_on_card?(card_number, agent_name, repo_path: repo_path)
+                unless agent_commented_on_card?(card_number, agent_name, repo_path: repo_path, since: session_started_at)
                   post_fallback_comment(card_number, branch, agent_name, project_config)
                 end
               rescue StandardError => e
@@ -330,14 +336,21 @@ module Brainiac
             post_fallback_comment(card_number, work_item&.dig("branch") || "unknown", agent_name, project_config)
           end
 
-          # Check if the agent has posted at least one comment on the card.
-          def agent_commented_on_card?(card_number, agent_name, repo_path:)
+          # Check if the agent posted a comment on the card since a given time.
+          # If no `since` is provided, checks for any agent comment (legacy behavior).
+          def agent_commented_on_card?(card_number, agent_name, repo_path:, since: nil)
             env = Helpers.fizzy_env_for(agent_name)
             output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, chdir: repo_path, env: env)
             comments = JSON.parse(output)["data"] || []
             agent_display = agent_display_name(agent_name)
 
-            comments.any? { |c| c["creator_name"]&.downcase == agent_display.downcase }
+            agent_comments = comments.select { |c| c["creator_name"]&.downcase == agent_display.downcase }
+            return agent_comments.any? unless since
+
+            agent_comments.any? do |c|
+              comment_time = c["created_at"] && Time.parse(c["created_at"])
+              comment_time && comment_time > since
+            end
           rescue StandardError
             false
           end

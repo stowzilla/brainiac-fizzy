@@ -408,7 +408,7 @@ def dispatch_cross_agent_review(ctx, card_key:, card_number:, card_assigned_agen
                             log_name: "review-#{ctx.agent_name.downcase}-#{card_number || ctx.card_internal_id}",
                             model: ctx.model, effort: ctx.effort, agent_name: ctx.agent_name,
                             card_number: card_number, comment_id: ctx.comment_id,
-                            source: :fizzy, source_context: { card_number: card_number },
+                            source: :fizzy, source_context: { card_number: card_number, dispatched_at: Time.now },
                             cli_provider: ctx.cli_provider_override)
   return [200, { status: "dispatch_failed", agent: ctx.agent_name, card: card_number }.to_json] unless pid
 
@@ -514,7 +514,7 @@ def dispatch_new_mention(ctx, card_key:, card_number:, card_title:, branch:, wor
                             model: ctx.model, effort: ctx.effort, agent_name: ctx.agent_name,
                             card_number: card_number, comment_id: ctx.comment_id,
                             source: :fizzy, cli_provider: ctx.cli_provider_override,
-                            source_context: { card_number: card_number })
+                            source_context: { card_number: card_number, dispatched_at: Time.now })
   return [200, { status: "dispatch_failed", agent: ctx.agent_name, card: card_number }.to_json] unless pid
 
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: ctx.agent_name)
@@ -554,7 +554,7 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
                             source: :fizzy, cli_provider: ctx.cli_provider_override, resume: should_resume,
                             source_context: {
                               card_number: card_number, card_internal_id: ctx.card_internal_id,
-                              deploy_intent: ctx.deploy_intent
+                              deploy_intent: ctx.deploy_intent, dispatched_at: Time.now
                             })
   return [200, { status: "dispatch_failed", agent: ctx.agent_name, card: card_number }.to_json] unless pid
 
