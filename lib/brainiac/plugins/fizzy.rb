@@ -16,6 +16,7 @@ require_relative "fizzy/handlers/dedup"
 require_relative "fizzy/handlers/deploy"
 require_relative "fizzy/handlers/card_index"
 require_relative "fizzy/handlers/deployments"
+require_relative "fizzy/handlers/summarize"
 
 module Brainiac
   module Plugins

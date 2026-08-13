@@ -253,123 +253,26 @@ module Brainiac
 
             pid, log_file = run_agent(prompt, project_config: project_config, chdir: repo_path,
                                               log_name: "uat-#{card_number}", agent_name: agent_name,
-                                              source: :fizzy, source_context: { card_number: card_number, dispatched_at: Time.now }, skip_column_move: true)
+                                              source: :fizzy,
+                                              source_context: { card_number: card_number, dispatched_at: Time.now },
+                                              skip_column_move: true)
             register_session("card-#{card_number}", pid, log_file: log_file, agent_name: agent_name)
             LOG.info "[Fizzy] Dispatched #{agent_name} for UAT on card ##{card_number}" if defined?(LOG)
           rescue StandardError => e
             LOG.error "[Fizzy] Failed to dispatch UAT agent: #{e.message}" if defined?(LOG)
           end
 
-          # Re-dispatch an agent to post a summary comment when it completed work
-          # but didn't comment on the card. Fires async with a 60s timeout.
-          # If this session also fails to comment, posts a minimal fallback.
+          # Delegated to Summarize module for manageable file length.
           def dispatch_summarize_session(ctx)
-            card_number = ctx[:card_number]
-            agent_name = ctx[:agent_name]
-            project_config = ctx[:project_config]
-            repo_path = project_config["repo_path"]
-            session_started_at = ctx[:source_context]&.dig(:dispatched_at)
-
-            map = load_work_item_map
-            work_item = map.values.find do |info|
-              info.is_a?(Hash) &&
-                (info.dig("sources", "fizzy", "card_number").to_s == card_number.to_s ||
-                 info["number"].to_s == card_number.to_s)
-            end
-
-            branch = work_item&.dig("branch") || "unknown"
-            card_title = work_item&.dig("title") || ctx[:source_context]&.dig(:card_title) || "untitled"
-            worktree_path = work_item&.dig("worktree") || repo_path
-
-            LOG.info "[Fizzy] Agent #{agent_name} completed card ##{card_number} without commenting — " \
-                     "dispatching summarize session" if defined?(LOG)
-
-            prompt = render_prompt(Prompts::SUMMARIZE_WORK,
-                                   { "CARD_NUMBER" => card_number, "CARD_TITLE" => card_title, "BRANCH" => branch },
-                                   brain_context: "", agent_name: agent_name, channel: :fizzy,
-                                   board_key: Config.board_key_for_project(project_config))
-
-            pid, log_file = run_agent(prompt,
-                                      project_config: project_config, chdir: worktree_path,
-                                      log_name: "summarize-#{card_number}", agent_name: agent_name,
-                                      source: :fizzy,
-                                      source_context: { card_number: card_number, skip_summarize_redispatch: true },
-                                      skip_column_move: true)
-            register_session("card-#{card_number}-summarize", pid, log_file: log_file, agent_name: agent_name)
-
-            # Fire-and-forget monitor: kill after 60s if still running,
-            # then check if the agent commented. If not, post fallback.
-            Thread.new do
-              begin
-                deadline = Time.now + 60
-                loop do
-                  # Check if process exited
-                  result = Process.waitpid2(pid, Process::WNOHANG)
-                  break if result
-
-                  if Time.now > deadline
-                    Process.kill("TERM", pid) rescue nil
-                    Process.waitpid2(pid) rescue nil
-                    break
-                  end
-                  sleep 1
-                end
-
-                sleep 2 # Brief pause to let any comment propagate
-
-                unless agent_commented_on_card?(card_number, agent_name, repo_path: repo_path, since: session_started_at)
-                  post_fallback_comment(card_number, branch, agent_name, project_config)
-                end
-              rescue Errno::ECHILD
-                # Process already reaped by session manager — check for comment
-                sleep 2
-                unless agent_commented_on_card?(card_number, agent_name, repo_path: repo_path, since: session_started_at)
-                  post_fallback_comment(card_number, branch, agent_name, project_config)
-                end
-              rescue StandardError => e
-                LOG.error "[Fizzy] Summarize monitor error for card ##{card_number}: #{e.message}" if defined?(LOG)
-              end
-            end
-          rescue StandardError => e
-            LOG.error "[Fizzy] Failed to dispatch summarize session for card ##{card_number}: #{e.message}" if defined?(LOG)
-            # Last resort: post a minimal comment from the server
-            post_fallback_comment(card_number, work_item&.dig("branch") || "unknown", agent_name, project_config)
+            Summarize.dispatch_summarize_session(ctx)
           end
 
-          # Check if the agent posted a comment on the card since a given time.
-          # If no `since` is provided, checks for any agent comment (legacy behavior).
           def agent_commented_on_card?(card_number, agent_name, repo_path:, since: nil)
-            env = Helpers.fizzy_env_for(agent_name)
-            output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, chdir: repo_path, env: env)
-            comments = JSON.parse(output)["data"] || []
-            agent_display = agent_display_name(agent_name)
-
-            agent_comments = comments.select { |c| c["creator_name"]&.downcase == agent_display.downcase }
-            return agent_comments.any? unless since
-
-            agent_comments.any? do |c|
-              comment_time = c["created_at"] && Time.parse(c["created_at"])
-              comment_time && comment_time > since
-            end
-          rescue StandardError
-            false
+            Summarize.agent_commented_on_card?(card_number, agent_name, repo_path: repo_path, since: since)
           end
 
-          # Post a minimal server-generated comment when all else fails.
           def post_fallback_comment(card_number, branch, agent_name, project_config)
-            repo_path = project_config["repo_path"]
-            env = Helpers.fizzy_env_for(agent_name)
-
-            pr_url = Helpers.send(:detect_pr_url, branch, project_config)
-            body = "<p>✅ Work completed on this card.</p>"
-            body += "<p><a href=\"#{pr_url}\">View PR</a></p>" if pr_url
-            body += "<p><strong>Branch:</strong> <code>#{branch}</code></p>"
-
-            run_cmd("fizzy", "comment", "create", "--card", card_number.to_s, "--body", body,
-                    chdir: repo_path, env: env)
-            LOG.info "[Fizzy] Posted fallback comment on card ##{card_number}" if defined?(LOG)
-          rescue StandardError => e
-            LOG.error "[Fizzy] Failed to post fallback comment on card ##{card_number}: #{e.message}" if defined?(LOG)
+            Summarize.post_fallback_comment(card_number, branch, agent_name, project_config)
           end
 
           def close_uat_cards(card_list, repo_path)
