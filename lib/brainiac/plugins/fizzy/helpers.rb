@@ -66,7 +66,7 @@ module Brainiac
             comments.last(15).map do |c|
               body = c.dig("body", "plain_text") || ""
               body = "#{body[0..500]}..." if body.length > 500
-              "**#{c["creator_name"]}** (#{c["id"]}):\n#{body}"
+              "**#{c.dig("creator", "name")}** (#{c["id"]}):\n#{body}"
             end.join("\n\n---\n\n")
           rescue StandardError => e
             LOG.warn "[Fizzy] Could not fetch comments for card ##{card_number}: #{e.message}" if defined?(LOG)
@@ -82,7 +82,7 @@ module Brainiac
             return nil if comments.empty?
 
             comments.last(5).map do |c|
-              creator = c["creator_name"] || "unknown"
+              creator = c.dig("creator", "name") || "unknown"
               body = (c.dig("body", "plain_text") || "").lines.first(3).join.strip
               body = "#{body[0..200]}..." if body.length > 200
               "#{creator}: #{body}"
@@ -112,7 +112,7 @@ module Brainiac
 
             # Find the most recent agent comment, scoped to this session if `since` is provided.
             # Subtracts 30s buffer from `since` to account for clock skew between local server and Fizzy API.
-            agent_comments = comments.select { |c| c["creator_name"]&.downcase == agent_display.downcase }
+            agent_comments = comments.select { |c| c.dig("creator", "name")&.downcase == agent_display.downcase }
             if since
               buffered_since = since - 30
               agent_comments = agent_comments.select do |c|
