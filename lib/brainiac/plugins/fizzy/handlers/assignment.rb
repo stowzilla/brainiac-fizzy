@@ -5,7 +5,7 @@
 # When a card is assigned to a local agent, creates a worktree, builds the prompt,
 # and dispatches the agent to begin work.
 
-def handle_card_assigned(payload)
+def handle_card_assigned(payload, board_key: nil)
   eventable = payload["eventable"] || {}
   assignees = eventable["assignees"] || []
 
@@ -23,10 +23,10 @@ def handle_card_assigned(payload)
   title = eventable["title"] || "untitled"
   tags = eventable["tags"] || []
 
-  project_result = identify_project_by_tags(tags)
+  project_result = identify_project_by_tags(tags, board_key: board_key)
   unless project_result
     tag_names = tags.map { |t| t.is_a?(Hash) ? t["name"] : t }.join(", ")
-    LOG.warn "No project found for card ##{card_number} with tags: #{tag_names}"
+    LOG.warn "No project found for card ##{card_number} with tags: #{tag_names} (board: #{board_key})"
     return [200, { status: "ignored", reason: "no matching project" }.to_json]
   end
 
