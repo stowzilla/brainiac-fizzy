@@ -206,30 +206,65 @@ module Brainiac
 
             # Ask for webhook secret
             puts ""
-            print "Webhook secret (or blank to generate one): "
+            puts "Webhook setup:"
+            puts "  Fizzy generates the signing secret when you create a webhook."
+            print "Paste the webhook signing_secret from Fizzy (or 'skip' to set later): "
             secret = $stdin.gets&.chomp
-            if secret.nil? || secret.empty?
-              secret = Array.new(24) { (("a".."z").to_a + ("A".."Z").to_a + ("0".."9").to_a).sample }.join
-              puts "  Generated: #{secret}"
+            if secret.nil? || secret.empty? || secret == "skip"
+              secret = nil
+              puts "  ⚠ No secret set — you'll need to add it to fizzy.json manually later."
+              puts "    Create the webhook in Fizzy, then paste the signing_secret into:"
+              puts "    #{FIZZY_CONFIG_FILE} → boards.#{board_key}.webhook_secret"
             end
 
             # Write to fizzy.json
             config = load_fizzy_config
             config["boards"] ||= {}
-            config["boards"][board_key] = {
+            board_entry = {
               "board_id" => board_id,
-              "webhook_secret" => secret,
               "columns" => column_map
             }
+            board_entry["webhook_secret"] = secret if secret
+            config["boards"][board_key] = board_entry
             save_fizzy_config(config)
 
             puts ""
             puts "✓ Board \"#{board_name}\" added as '#{board_key}' in #{FIZZY_CONFIG_FILE}"
             puts "  Columns: #{column_map.keys.join(", ")}" unless column_map.empty?
+
+            # Offer to create webhook via fizzy CLI
+            puts ""
+            print "Create webhook in Fizzy now? [Y/n]: "
+            answer = $stdin.gets&.chomp&.downcase
+            if answer != "n"
+              print "Webhook payload URL (e.g., https://your-ngrok.app/fizzy/#{board_key}): "
+              webhook_url = $stdin.gets&.chomp
+              if webhook_url && !webhook_url.empty?
+                actions = "card_assigned,card_closed,card_published,card_reopened,card_triaged,comment_created"
+                webhook_json = run_fizzy("webhook", "create", "--board", board_id,
+                                         "--name", "brainiac-#{board_key}",
+                                         "--url", webhook_url,
+                                         "--actions", actions, "--json")
+                if webhook_json
+                  webhook_data = JSON.parse(webhook_json)["data"]
+                  signing_secret = webhook_data&.dig("signing_secret")
+                  if signing_secret
+                    config["boards"][board_key]["webhook_secret"] = signing_secret
+                    save_fizzy_config(config)
+                    puts "✓ Webhook created! Signing secret saved to fizzy.json."
+                  else
+                    puts "✓ Webhook created, but no signing_secret in response."
+                    puts "  Check with: fizzy webhook list --board #{board_id}"
+                  end
+                else
+                  puts "⚠ Failed to create webhook. Create it manually in Fizzy."
+                end
+              end
+            end
+
             puts ""
             puts "Next steps:"
             puts "  brainiac fizzy board assign <project-key> #{board_key}"
-            puts "  Set up webhook in Fizzy pointing to: https://<your-ngrok>/fizzy/#{board_key}"
           end
 
           def board_list
