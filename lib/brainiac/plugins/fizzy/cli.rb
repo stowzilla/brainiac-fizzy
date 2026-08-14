@@ -133,11 +133,11 @@ module Brainiac
             puts "================="
             puts ""
 
-            board = board_setup_select_board
+            board = board_setup_select_or_create_board
             return unless board
 
             board_key = board_setup_choose_key(board["name"])
-            column_map = board_setup_map_columns(board["id"], board["name"])
+            column_map = board_setup_columns(board["id"], board["name"])
             secret = board_setup_ask_secret(board_key)
 
             config = board_setup_save(board_key, board["id"], column_map, secret)
@@ -153,7 +153,7 @@ module Brainiac
             puts "  brainiac fizzy board assign <project-key> #{board_key}"
           end
 
-          def board_setup_select_board
+          def board_setup_select_or_create_board
             boards_json = run_fizzy("board", "list", "--all", "--json")
             unless boards_json
               puts "Error: Could not fetch boards from Fizzy CLI."
@@ -163,21 +163,42 @@ module Brainiac
             end
 
             boards = JSON.parse(boards_json)["data"] || []
-            if boards.empty?
-              puts "No boards found in your Fizzy account."
-              return nil
-            end
 
             puts "Available boards:"
             boards.each_with_index do |board, i|
               puts "  #{i + 1}) #{board["name"]} (#{board["id"]})"
             end
+            puts "  #{boards.size + 1}) ✨ Create a new board"
             puts ""
             print "Select board number: "
             choice = $stdin.gets&.chomp&.to_i
-            return puts("Cancelled.") unless choice&.positive? && choice <= boards.size
+            return puts("Cancelled.") unless choice&.positive? && choice <= boards.size + 1
 
-            boards[choice - 1]
+            if choice == boards.size + 1
+              board_setup_create_board
+            else
+              boards[choice - 1]
+            end
+          end
+
+          def board_setup_create_board
+            print "New board name: "
+            name = $stdin.gets&.chomp
+            return puts("Cancelled.") if name.nil? || name.empty?
+
+            print "Allow all team members access? [Y/n]: "
+            all_access = $stdin.gets&.chomp&.downcase != "n"
+
+            args = ["board", "create", "--name", name, "--all_access", all_access.to_s, "--json"]
+            output = run_fizzy(*args)
+            unless output
+              puts "Error: Failed to create board."
+              return nil
+            end
+
+            board_data = JSON.parse(output)["data"]
+            puts "✓ Created board \"#{name}\" (#{board_data["id"]})"
+            board_data
           end
 
           def board_setup_choose_key(board_name)
@@ -188,29 +209,67 @@ module Brainiac
             board_key
           end
 
-          def board_setup_map_columns(board_id, board_name)
+          def board_setup_columns(board_id, board_name)
             columns_json = run_fizzy("column", "list", "--board", board_id, "--json")
             columns = columns_json ? (JSON.parse(columns_json)["data"] || []) : []
             custom_columns = columns.reject { |c| c["pseudo"] }
 
             puts ""
-            puts "Columns for \"#{board_name}\":"
-            if columns.empty?
-              puts "  (no columns found)"
-            else
+            if custom_columns.any?
+              puts "Existing columns for \"#{board_name}\":"
               columns.each do |col|
                 pseudo_tag = col["pseudo"] ? " [built-in]" : ""
                 puts "  • #{col["name"]} (#{col["id"]})#{pseudo_tag}"
               end
+              puts ""
+              print "Create brainiac lifecycle columns (right_now, needs_review, uat)? [y/N]: "
+              custom_columns = board_setup_create_lifecycle_columns(board_id, custom_columns) if $stdin.gets&.chomp&.downcase == "y"
+            else
+              puts "No custom columns on \"#{board_name}\" yet."
+              print "Create brainiac lifecycle columns (right_now, needs_review, uat)? [Y/n]: "
+              custom_columns = board_setup_create_lifecycle_columns(board_id, custom_columns) if $stdin.gets&.chomp&.downcase != "n"
             end
 
             puts ""
-            puts "Which columns should brainiac track? Enter config names for each."
-            puts "(These map to column transitions like right_now, needs_review, uat, etc.)"
-            puts "Leave blank to skip a column."
+            puts "Map columns to brainiac config keys:"
+            puts "(These control lifecycle transitions: right_now, needs_review, uat)"
+            puts "Leave blank to accept suggestion, '-' to skip."
             puts ""
 
             prompt_column_mapping(custom_columns)
+          end
+
+          def board_setup_create_lifecycle_columns(board_id, existing_columns)
+            lifecycle = [
+              { config_key: "right_now", default_name: "Right Now", color: "blue" },
+              { config_key: "needs_review", default_name: "Needs Review", color: "yellow" },
+              { config_key: "uat", default_name: "UAT", color: "lime" }
+            ]
+
+            existing_names = existing_columns.map { |c| c["name"].downcase }
+
+            lifecycle.each do |col_def|
+              if existing_names.include?(col_def[:default_name].downcase)
+                puts "  ✓ \"#{col_def[:default_name]}\" already exists"
+                next
+              end
+
+              print "  Name for #{col_def[:config_key]} column [#{col_def[:default_name]}]: "
+              name = $stdin.gets&.chomp
+              name = col_def[:default_name] if name.nil? || name.empty?
+
+              output = run_fizzy("column", "create", "--board", board_id,
+                                 "--name", name, "--color", col_def[:color], "--json")
+              if output
+                col_data = JSON.parse(output)["data"]
+                puts "  ✓ Created \"#{name}\" (#{col_data["id"]})"
+                existing_columns << col_data
+              else
+                puts "  ⚠ Failed to create \"#{name}\""
+              end
+            end
+
+            existing_columns
           end
 
           def board_setup_ask_secret(board_key)
