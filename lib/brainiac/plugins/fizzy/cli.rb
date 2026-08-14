@@ -223,15 +223,11 @@ module Brainiac
               end
               puts ""
               print "Create brainiac lifecycle columns (right_now, needs_review, uat)? [y/N]: "
-              if $stdin.gets&.chomp&.downcase == "y"
-                custom_columns = board_setup_create_lifecycle_columns(board_id, custom_columns)
-              end
+              custom_columns = board_setup_create_lifecycle_columns(board_id, custom_columns) if $stdin.gets&.chomp&.downcase == "y"
             else
               puts "No custom columns on \"#{board_name}\" yet."
               print "Create brainiac lifecycle columns (right_now, needs_review, uat)? [Y/n]: "
-              if $stdin.gets&.chomp&.downcase != "n"
-                custom_columns = board_setup_create_lifecycle_columns(board_id, custom_columns)
-              end
+              custom_columns = board_setup_create_lifecycle_columns(board_id, custom_columns) if $stdin.gets&.chomp&.downcase != "n"
             end
 
             puts ""
