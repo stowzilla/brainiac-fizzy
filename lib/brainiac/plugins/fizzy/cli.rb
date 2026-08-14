@@ -240,8 +240,16 @@ module Brainiac
             print "Create webhook in Fizzy now? [Y/n]: "
             answer = $stdin.gets&.chomp&.downcase
             if answer != "n"
-              print "Webhook payload URL (e.g., https://your-ngrok.app/fizzy/#{board_key}): "
-              webhook_url = $stdin.gets&.chomp
+              detected_url = detect_ngrok_url
+              if detected_url
+                default_url = "#{detected_url}/fizzy/#{board_key}"
+                print "Webhook payload URL [#{default_url}]: "
+                input = $stdin.gets&.chomp
+                webhook_url = input.nil? || input.empty? ? default_url : input
+              else
+                print "Webhook payload URL (e.g., https://your-ngrok.app/fizzy/#{board_key}): "
+                webhook_url = $stdin.gets&.chomp
+              end
               if webhook_url && !webhook_url.empty?
                 actions = "card_assigned,card_closed,card_published,card_reopened,card_triaged,comment_created"
                 webhook_json = run_fizzy("webhook", "create", "--board", board_id,
@@ -454,8 +462,17 @@ module Brainiac
 
             # Get webhook URL
             unless webhook_url
-              print "Webhook payload URL (e.g., https://your-ngrok.app/fizzy/#{board_key}): "
-              webhook_url = $stdin.gets&.chomp
+              # Try to auto-detect from ngrok
+              detected_url = detect_ngrok_url
+              if detected_url
+                default_url = "#{detected_url}/fizzy/#{board_key}"
+                print "Webhook payload URL [#{default_url}]: "
+                input = $stdin.gets&.chomp
+                webhook_url = input.nil? || input.empty? ? default_url : input
+              else
+                print "Webhook payload URL (e.g., https://your-ngrok.app/fizzy/#{board_key}): "
+                webhook_url = $stdin.gets&.chomp
+              end
             end
 
             if webhook_url.nil? || webhook_url.empty?
@@ -523,6 +540,21 @@ module Brainiac
             output, status = Open3.capture2("fizzy", *args)
             status.success? ? output : nil
           rescue Errno::ENOENT
+            nil
+          end
+
+          def detect_ngrok_url
+            require "net/http"
+            uri = URI("http://127.0.0.1:4040/api/tunnels")
+            http = Net::HTTP.new(uri.host, uri.port)
+            http.open_timeout = 2
+            http.read_timeout = 2
+            response = http.get(uri.path)
+            data = JSON.parse(response.body)
+            tunnels = data["tunnels"] || []
+            https_tunnel = tunnels.find { |t| t["public_url"]&.start_with?("https://") }
+            https_tunnel&.dig("public_url")
+          rescue StandardError
             nil
           end
 
