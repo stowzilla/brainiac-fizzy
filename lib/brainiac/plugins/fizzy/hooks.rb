@@ -336,7 +336,36 @@ module Brainiac
                 LOG.info "[Fizzy:CardIndex] Starting background backfill..."
                 CARD_INDEX.backfill
               end
+
+              # Auto-reactivate deactivated webhooks in background
+              Thread.new { check_and_reactivate_webhooks }
             end
+          end
+
+          def check_and_reactivate_webhooks
+            boards = Config.boards
+            return if boards.empty?
+
+            env = Helpers.default_fizzy_env
+            boards.each do |board_key, board_config|
+              board_id = board_config["board_id"]
+              next unless board_id
+
+              output = run_cmd("fizzy", "webhook", "list", "--board", board_id, "--all", "--json", env: env)
+              webhooks = JSON.parse(output)["data"] || []
+
+              webhooks.each do |webhook|
+                next unless webhook["name"]&.start_with?("brainiac")
+                next if webhook["active"]
+
+                LOG.info "[Fizzy] Reactivating webhook '#{webhook["name"]}' on board '#{board_key}' (was inactive)"
+                run_cmd("fizzy", "webhook", "reactivate", webhook["id"], "--board", board_id, env: env)
+              end
+            rescue StandardError => e
+              LOG.warn "[Fizzy] Could not check webhooks for board '#{board_key}': #{e.message}"
+            end
+          rescue StandardError => e
+            LOG.warn "[Fizzy] Webhook reactivation check failed: #{e.message}"
           end
 
           # Detect CLI provider from Fizzy card tags (e.g., cli-grok tag)

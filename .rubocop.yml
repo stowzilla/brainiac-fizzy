@@ -39,12 +39,14 @@ Metrics/ModuleLength:
   Max: 300
   Exclude:
     - "lib/brainiac/plugins/fizzy/hooks.rb"
+    - "lib/brainiac/plugins/fizzy/cli.rb"
 
 Metrics/ClassLength:
   Max: 300
   Exclude:
     - "test/**/*"
     - "lib/brainiac/plugins/fizzy/hooks.rb"
+    - "lib/brainiac/plugins/fizzy/cli.rb"
 
 Metrics/BlockNesting:
   Max: 5

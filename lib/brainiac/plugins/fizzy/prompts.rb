@@ -23,8 +23,12 @@ module Brainiac
           ### Screenshots (MANDATORY for UI changes)
           If you touched any `.js`, `.jsx`, `.css`, or `.html` in a web app directory and `./scripts/screenshot-page.sh` exists, screenshot every affected page.
 
-          ### Retrieving Full Comment Text
-          If you need the full text of a truncated comment, run: `fizzy comment show COMMENT_ID --card CARD_NUMBER`
+          ### Fizzy CLI Tips
+          - Use `--jq` for filtering output (built-in, never pipe to external jq): `fizzy card list --jq '[.data[] | {number, title}]'`
+          - Use `fizzy search "query"` for cross-board full-text search
+          - Use `fizzy card list --search "term"` for structured filtering within a board
+          - Use `--agent` flag for raw JSON data without envelope when parsing output
+          - Retrieve full comment text: `fizzy comment show COMMENT_ID --card CARD_NUMBER`
 
           ### Card Memory Discipline (CRITICAL for long-running cards)
           When writing your memory file for a Fizzy card session, include:
@@ -40,8 +44,8 @@ module Brainiac
           Re-fetch the card to see if anything changed while you were working:
 
           ```bash
-          fizzy card show {{CARD_NUMBER}}
-          fizzy comment list --card {{CARD_NUMBER}}
+          fizzy card show {{CARD_NUMBER}} --jq '.data | {title, description, assignees: [.assignees[].name]}'
+          fizzy comment list --card {{CARD_NUMBER}} --jq '[.data[-5:] | .[] | {creator: .creator.name, body: .body.plain_text}]'
           ```
 
           Compare against the card context from the start of your session. Check for:
