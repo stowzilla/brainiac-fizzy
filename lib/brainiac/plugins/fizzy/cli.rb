@@ -112,14 +112,17 @@ module Brainiac
               board_assign(args)
             when "columns", "refresh"
               board_columns(args)
+            when "webhook"
+              board_webhook(args)
             else
-              puts "Usage: brainiac fizzy board <setup|list|assign|columns>"
+              puts "Usage: brainiac fizzy board <setup|list|assign|columns|webhook>"
               puts ""
               puts "Commands:"
               puts "  setup                         Add a new board (interactive, fetches columns from Fizzy)"
               puts "  list                          List configured boards and their columns"
               puts "  assign <project> <board_key>  Assign a project to a board"
               puts "  columns <board_key>           Refresh columns for a board from Fizzy"
+              puts "  webhook <board_key> [url]     Create/replace webhook and save the signing secret"
             end
           end
 
@@ -398,6 +401,93 @@ module Brainiac
 
             puts ""
             puts "✓ Updated columns for '#{board_key}': #{new_map.keys.join(", ")}"
+          end
+
+          def board_webhook(args)
+            board_key = args.shift
+            webhook_url = args.shift
+
+            unless board_key
+              puts "Usage: brainiac fizzy board webhook <board-key> [payload-url]"
+              puts ""
+              puts "Creates a webhook in Fizzy for the board and saves the signing secret."
+              puts "If the board already has a webhook, deletes it first."
+              puts ""
+              puts "Available boards:"
+              config = load_fizzy_config
+              (config["boards"] || {}).each_key { |k| puts "  #{k}" }
+              return
+            end
+
+            config = load_fizzy_config
+            board_config = config.dig("boards", board_key)
+            unless board_config
+              puts "Error: Board '#{board_key}' not found in fizzy.json."
+              return
+            end
+
+            board_id = board_config["board_id"]
+
+            # Check for existing webhooks and offer to delete
+            existing_json = run_fizzy("webhook", "list", "--board", board_id, "--all", "--json")
+            if existing_json
+              existing = JSON.parse(existing_json)["data"] || []
+              brainiac_webhooks = existing.select { |w| w["name"]&.start_with?("brainiac") }
+              if brainiac_webhooks.any?
+                puts "Existing brainiac webhook(s) found:"
+                brainiac_webhooks.each do |w|
+                  status = w["active"] ? "active" : "inactive"
+                  puts "  • #{w["name"]} (#{status}) → #{w["payload_url"]}"
+                end
+                print "Delete existing and create new? [Y/n]: "
+                answer = $stdin.gets&.chomp&.downcase
+                if answer == "n"
+                  puts "Cancelled."
+                  return
+                end
+                brainiac_webhooks.each do |w|
+                  run_fizzy("webhook", "delete", w["id"], "--board", board_id)
+                  puts "  Deleted: #{w["name"]}"
+                end
+              end
+            end
+
+            # Get webhook URL
+            unless webhook_url
+              print "Webhook payload URL (e.g., https://your-ngrok.app/fizzy/#{board_key}): "
+              webhook_url = $stdin.gets&.chomp
+            end
+
+            if webhook_url.nil? || webhook_url.empty?
+              puts "Error: Payload URL is required."
+              return
+            end
+
+            # Create the webhook
+            actions = "card_assigned,card_closed,card_published,card_reopened,card_triaged,comment_created"
+            webhook_json = run_fizzy("webhook", "create", "--board", board_id,
+                                     "--name", "brainiac-#{board_key}",
+                                     "--url", webhook_url,
+                                     "--actions", actions, "--json")
+            unless webhook_json
+              puts "Error: Failed to create webhook."
+              return
+            end
+
+            webhook_data = JSON.parse(webhook_json)["data"]
+            signing_secret = webhook_data&.dig("signing_secret")
+            webhook_id = webhook_data&.dig("id")
+
+            if signing_secret
+              config["boards"][board_key]["webhook_secret"] = signing_secret
+              save_fizzy_config(config)
+              puts "✓ Webhook created (ID: #{webhook_id})"
+              puts "  URL: #{webhook_url}"
+              puts "  Signing secret saved to fizzy.json"
+            else
+              puts "✓ Webhook created but no signing_secret in response."
+              puts "  Check: fizzy webhook show #{webhook_id} --board #{board_id}"
+            end
           end
 
           def load_fizzy_config
