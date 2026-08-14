@@ -5,7 +5,7 @@
 # When a new card is created, checks for similar existing cards using
 # trigram and semantic similarity. Posts a warning comment if duplicates found.
 
-def handle_card_published(payload)
+def handle_card_published(payload, board_key: nil)
   eventable = payload["eventable"] || {}
   card_number = eventable["number"]
   title = eventable["title"] || ""
