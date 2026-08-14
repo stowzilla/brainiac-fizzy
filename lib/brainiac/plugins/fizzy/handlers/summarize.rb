@@ -54,7 +54,7 @@ module Brainiac
             comments = JSON.parse(output)["data"] || []
             agent_display = agent_display_name(agent_name)
 
-            agent_comments = comments.select { |c| c["creator_name"]&.downcase == agent_display.downcase }
+            agent_comments = comments.select { |c| c.dig("creator", "name")&.downcase == agent_display.downcase }
             return agent_comments.any? unless since
 
             buffered_since = since - CLOCK_SKEW_BUFFER
