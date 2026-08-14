@@ -126,27 +126,48 @@ module Brainiac
             end
           end
 
+          # --- board setup (split into phases) ---
+
           def board_setup
             puts "Fizzy Board Setup"
             puts "================="
             puts ""
 
-            # Fetch boards from Fizzy CLI
+            board = board_setup_select_board
+            return unless board
+
+            board_key = board_setup_choose_key(board["name"])
+            column_map = board_setup_map_columns(board["id"], board["name"])
+            secret = board_setup_ask_secret(board_key)
+
+            config = board_setup_save(board_key, board["id"], column_map, secret)
+
+            puts ""
+            puts "✓ Board \"#{board["name"]}\" added as '#{board_key}' in #{FIZZY_CONFIG_FILE}"
+            puts "  Columns: #{column_map.keys.join(", ")}" unless column_map.empty?
+
+            board_setup_offer_webhook(config, board_key, board["id"])
+
+            puts ""
+            puts "Next steps:"
+            puts "  brainiac fizzy board assign <project-key> #{board_key}"
+          end
+
+          def board_setup_select_board
             boards_json = run_fizzy("board", "list", "--all", "--json")
             unless boards_json
               puts "Error: Could not fetch boards from Fizzy CLI."
               puts "  Ensure 'fizzy' is on your PATH and authenticated."
               puts "  Run: fizzy doctor"
-              return
+              return nil
             end
 
             boards = JSON.parse(boards_json)["data"] || []
             if boards.empty?
               puts "No boards found in your Fizzy account."
-              return
+              return nil
             end
 
-            # Display boards for selection
             puts "Available boards:"
             boards.each_with_index do |board, i|
               puts "  #{i + 1}) #{board["name"]} (#{board["id"]})"
@@ -154,129 +175,88 @@ module Brainiac
             puts ""
             print "Select board number: "
             choice = $stdin.gets&.chomp&.to_i
-            return puts("Cancelled.") unless choice && choice.positive? && choice <= boards.size
+            return puts("Cancelled.") unless choice&.positive? && choice <= boards.size
 
-            board = boards[choice - 1]
-            board_id = board["id"]
-            board_name = board["name"]
+            boards[choice - 1]
+          end
 
-            # Ask for a board key (used in fizzy.json and project config)
+          def board_setup_choose_key(board_name)
             suggested_key = board_name.downcase.gsub(/[^a-z0-9]+/, "_").gsub(/^_|_$/, "")
             print "Board key for config [#{suggested_key}]: "
             board_key = $stdin.gets&.chomp
             board_key = suggested_key if board_key.nil? || board_key.empty?
+            board_key
+          end
 
-            # Fetch columns
+          def board_setup_map_columns(board_id, board_name)
             columns_json = run_fizzy("column", "list", "--board", board_id, "--json")
-            columns = if columns_json
-                        JSON.parse(columns_json)["data"] || []
-                      else
-                        []
-                      end
-
-            # Filter out pseudo columns (built-in) — user probably wants custom ones
+            columns = columns_json ? (JSON.parse(columns_json)["data"] || []) : []
             custom_columns = columns.reject { |c| c["pseudo"] }
-            all_columns = columns
 
             puts ""
             puts "Columns for \"#{board_name}\":"
-            if all_columns.empty?
+            if columns.empty?
               puts "  (no columns found)"
             else
-              all_columns.each do |col|
+              columns.each do |col|
                 pseudo_tag = col["pseudo"] ? " [built-in]" : ""
                 puts "  • #{col["name"]} (#{col["id"]})#{pseudo_tag}"
               end
             end
 
-            # Let user name the columns they want tracked
             puts ""
             puts "Which columns should brainiac track? Enter config names for each."
             puts "(These map to column transitions like right_now, needs_review, uat, etc.)"
             puts "Leave blank to skip a column."
             puts ""
 
-            column_map = {}
-            custom_columns.each do |col|
-              suggested = col["name"].downcase.gsub(/[^a-z0-9]+/, "_").gsub(/^_|_$/, "")
-              print "  \"#{col["name"]}\" → config key [#{suggested}]: "
-              key = $stdin.gets&.chomp
-              key = suggested if key.nil? || key.empty?
-              next if key == "-" || key == "skip"
+            prompt_column_mapping(custom_columns)
+          end
 
-              column_map[key] = col["id"]
-            end
-
-            # Ask for webhook secret
+          def board_setup_ask_secret(board_key)
             puts ""
             puts "Webhook setup:"
             puts "  Fizzy generates the signing secret when you create a webhook."
             print "Paste the webhook signing_secret from Fizzy (or 'skip' to set later): "
             secret = $stdin.gets&.chomp
             if secret.nil? || secret.empty? || secret == "skip"
-              secret = nil
               puts "  ⚠ No secret set — you'll need to add it to fizzy.json manually later."
               puts "    Create the webhook in Fizzy, then paste the signing_secret into:"
               puts "    #{FIZZY_CONFIG_FILE} → boards.#{board_key}.webhook_secret"
+              nil
+            else
+              secret
             end
+          end
 
-            # Write to fizzy.json
+          def board_setup_save(board_key, board_id, column_map, secret)
             config = load_fizzy_config
             config["boards"] ||= {}
-            board_entry = {
-              "board_id" => board_id,
-              "columns" => column_map
-            }
+            board_entry = { "board_id" => board_id, "columns" => column_map }
             board_entry["webhook_secret"] = secret if secret
             config["boards"][board_key] = board_entry
             save_fizzy_config(config)
+            config
+          end
 
-            puts ""
-            puts "✓ Board \"#{board_name}\" added as '#{board_key}' in #{FIZZY_CONFIG_FILE}"
-            puts "  Columns: #{column_map.keys.join(", ")}" unless column_map.empty?
-
-            # Offer to create webhook via fizzy CLI
+          def board_setup_offer_webhook(config, board_key, board_id)
             puts ""
             print "Create webhook in Fizzy now? [Y/n]: "
             answer = $stdin.gets&.chomp&.downcase
-            if answer != "n"
-              detected_url = detect_ngrok_url
-              if detected_url
-                default_url = "#{detected_url}/fizzy/#{board_key}"
-                print "Webhook payload URL [#{default_url}]: "
-                input = $stdin.gets&.chomp
-                webhook_url = input.nil? || input.empty? ? default_url : input
-              else
-                print "Webhook payload URL (e.g., https://your-ngrok.app/fizzy/#{board_key}): "
-                webhook_url = $stdin.gets&.chomp
-              end
-              if webhook_url && !webhook_url.empty?
-                actions = "card_assigned,card_closed,card_published,card_reopened,card_triaged,comment_created"
-                webhook_json = run_fizzy("webhook", "create", "--board", board_id,
-                                         "--name", "brainiac-#{board_key}",
-                                         "--url", webhook_url,
-                                         "--actions", actions, "--json")
-                if webhook_json
-                  webhook_data = JSON.parse(webhook_json)["data"]
-                  signing_secret = webhook_data&.dig("signing_secret")
-                  if signing_secret
-                    config["boards"][board_key]["webhook_secret"] = signing_secret
-                    save_fizzy_config(config)
-                    puts "✓ Webhook created! Signing secret saved to fizzy.json."
-                  else
-                    puts "✓ Webhook created, but no signing_secret in response."
-                    puts "  Check with: fizzy webhook list --board #{board_id}"
-                  end
-                else
-                  puts "⚠ Failed to create webhook. Create it manually in Fizzy."
-                end
-              end
-            end
+            return if answer == "n"
 
-            puts ""
-            puts "Next steps:"
-            puts "  brainiac fizzy board assign <project-key> #{board_key}"
+            webhook_url = prompt_webhook_url(board_key)
+            return unless webhook_url && !webhook_url.empty?
+
+            signing_secret = create_fizzy_webhook(board_id, board_key, webhook_url)
+            return unless signing_secret
+
+            config["boards"][board_key]["webhook_secret"] = signing_secret
+            save_fizzy_config(config)
+            puts "✓ Webhook created! Signing secret saved to fizzy.json."
           end
+
+          # --- board list ---
 
           def board_list
             config = load_fizzy_config
@@ -288,7 +268,6 @@ module Brainiac
               return
             end
 
-            # Load projects to show assignments
             projects = load_projects_config
 
             puts "Configured boards:"
@@ -306,11 +285,12 @@ module Brainiac
                 puts "    Columns:  (none configured)"
               end
 
-              # Show which projects use this board
               assigned = projects.select { |_, cfg| cfg["fizzy_board"] == key }.keys
               puts "    Projects: #{assigned.any? ? assigned.join(", ") : "(none)"}"
             end
           end
+
+          # --- board assign ---
 
           def board_assign(args)
             project_key = args.shift
@@ -328,7 +308,6 @@ module Brainiac
               return
             end
 
-            # Validate board exists
             config = load_fizzy_config
             unless config.dig("boards", board_key)
               puts "Error: Board '#{board_key}' not found in fizzy.json."
@@ -336,7 +315,6 @@ module Brainiac
               return
             end
 
-            # Update projects.json
             projects = load_projects_config
             unless projects.key?(project_key)
               puts "Error: Project '#{project_key}' not found in projects.json."
@@ -349,6 +327,8 @@ module Brainiac
 
             puts "✓ Assigned project '#{project_key}' to board '#{board_key}'"
           end
+
+          # --- board columns ---
 
           def board_columns(args)
             board_key = args.shift
@@ -392,17 +372,7 @@ module Brainiac
             puts "Update column mappings? (Enter new config keys, blank to keep, '-' to remove)"
             puts ""
 
-            new_map = {}
-            custom_columns.each do |col|
-              existing_key = existing_map.key(col["id"])
-              suggested = existing_key || col["name"].downcase.gsub(/[^a-z0-9]+/, "_").gsub(/^_|_$/, "")
-              print "  \"#{col["name"]}\" → [#{suggested}]: "
-              key = $stdin.gets&.chomp
-              key = suggested if key.nil? || key.empty?
-              next if key == "-" || key == "skip"
-
-              new_map[key] = col["id"]
-            end
+            new_map = prompt_column_mapping(custom_columns, existing_map)
 
             config["boards"][board_key]["columns"] = new_map
             save_fizzy_config(config)
@@ -410,6 +380,8 @@ module Brainiac
             puts ""
             puts "✓ Updated columns for '#{board_key}': #{new_map.keys.join(", ")}"
           end
+
+          # --- board webhook (split into phases) ---
 
           def board_webhook(args)
             board_key = args.shift
@@ -436,64 +408,46 @@ module Brainiac
 
             board_id = board_config["board_id"]
 
-            # Check for existing webhooks and offer to delete
-            existing_json = run_fizzy("webhook", "list", "--board", board_id, "--all", "--json")
-            if existing_json
-              existing = JSON.parse(existing_json)["data"] || []
-              brainiac_webhooks = existing.select { |w| w["name"]&.start_with?("brainiac") }
-              if brainiac_webhooks.any?
-                puts "Existing brainiac webhook(s) found:"
-                brainiac_webhooks.each do |w|
-                  status = w["active"] ? "active" : "inactive"
-                  puts "  • #{w["name"]} (#{status}) → #{w["payload_url"]}"
-                end
-                print "Delete existing and create new? [Y/n]: "
-                answer = $stdin.gets&.chomp&.downcase
-                if answer == "n"
-                  puts "Cancelled."
-                  return
-                end
-                brainiac_webhooks.each do |w|
-                  run_fizzy("webhook", "delete", w["id"], "--board", board_id)
-                  puts "  Deleted: #{w["name"]}"
-                end
-              end
-            end
+            return if remove_existing_webhooks(board_id) == :cancelled
 
-            # Get webhook URL
-            unless webhook_url
-              # Try to auto-detect from ngrok
-              detected_url = detect_ngrok_url
-              if detected_url
-                default_url = "#{detected_url}/fizzy/#{board_key}"
-                print "Webhook payload URL [#{default_url}]: "
-                input = $stdin.gets&.chomp
-                webhook_url = input.nil? || input.empty? ? default_url : input
-              else
-                print "Webhook payload URL (e.g., https://your-ngrok.app/fizzy/#{board_key}): "
-                webhook_url = $stdin.gets&.chomp
-              end
-            end
-
+            webhook_url ||= prompt_webhook_url(board_key)
             if webhook_url.nil? || webhook_url.empty?
               puts "Error: Payload URL is required."
               return
             end
 
-            # Create the webhook
-            actions = "card_assigned,card_closed,card_published,card_reopened,card_triaged,comment_created"
-            webhook_json = run_fizzy("webhook", "create", "--board", board_id,
-                                     "--name", "brainiac-#{board_key}",
-                                     "--url", webhook_url,
-                                     "--actions", actions, "--json")
-            unless webhook_json
-              puts "Error: Failed to create webhook."
-              return
-            end
+            board_webhook_create_and_save(config, board_key, board_id, webhook_url)
+          end
 
-            webhook_data = JSON.parse(webhook_json)["data"]
-            signing_secret = webhook_data&.dig("signing_secret")
-            webhook_id = webhook_data&.dig("id")
+          def remove_existing_webhooks(board_id)
+            existing_json = run_fizzy("webhook", "list", "--board", board_id, "--all", "--json")
+            return :proceed unless existing_json
+
+            existing = JSON.parse(existing_json)["data"] || []
+            brainiac_webhooks = existing.select { |w| w["name"]&.start_with?("brainiac") }
+            return :proceed unless brainiac_webhooks.any?
+
+            puts "Existing brainiac webhook(s) found:"
+            brainiac_webhooks.each do |w|
+              status = w["active"] ? "active" : "inactive"
+              puts "  • #{w["name"]} (#{status}) → #{w["payload_url"]}"
+            end
+            print "Delete existing and create new? [Y/n]: "
+            answer = $stdin.gets&.chomp&.downcase
+            if answer == "n"
+              puts "Cancelled."
+              return :cancelled
+            end
+            brainiac_webhooks.each do |w|
+              run_fizzy("webhook", "delete", w["id"], "--board", board_id)
+              puts "  Deleted: #{w["name"]}"
+            end
+            :proceed
+          end
+
+          def board_webhook_create_and_save(config, board_key, board_id, webhook_url)
+            signing_secret = create_fizzy_webhook(board_id, board_key, webhook_url)
+            webhook_id = @last_webhook_id
 
             if signing_secret
               config["boards"][board_key]["webhook_secret"] = signing_secret
@@ -505,6 +459,52 @@ module Brainiac
               puts "✓ Webhook created but no signing_secret in response."
               puts "  Check: fizzy webhook show #{webhook_id} --board #{board_id}"
             end
+          end
+
+          # --- shared helpers ---
+
+          def prompt_column_mapping(columns, existing_map = {})
+            column_map = {}
+            columns.each do |col|
+              existing_key = existing_map.key(col["id"])
+              suggested = existing_key || col["name"].downcase.gsub(/[^a-z0-9]+/, "_").gsub(/^_|_$/, "")
+              print "  \"#{col["name"]}\" → config key [#{suggested}]: "
+              key = $stdin.gets&.chomp
+              key = suggested if key.nil? || key.empty?
+              next if ["-", "skip"].include?(key)
+
+              column_map[key] = col["id"]
+            end
+            column_map
+          end
+
+          def prompt_webhook_url(board_key)
+            detected_url = detect_ngrok_url
+            if detected_url
+              default_url = "#{detected_url}/fizzy/#{board_key}"
+              print "Webhook payload URL [#{default_url}]: "
+              input = $stdin.gets&.chomp
+              input.nil? || input.empty? ? default_url : input
+            else
+              print "Webhook payload URL (e.g., https://your-ngrok.app/fizzy/#{board_key}): "
+              $stdin.gets&.chomp
+            end
+          end
+
+          def create_fizzy_webhook(board_id, board_key, webhook_url)
+            actions = "card_assigned,card_closed,card_published,card_reopened,card_triaged,comment_created"
+            webhook_json = run_fizzy("webhook", "create", "--board", board_id,
+                                     "--name", "brainiac-#{board_key}",
+                                     "--url", webhook_url,
+                                     "--actions", actions, "--json")
+            unless webhook_json
+              puts "⚠ Failed to create webhook. Create it manually in Fizzy."
+              return nil
+            end
+
+            webhook_data = JSON.parse(webhook_json)["data"]
+            @last_webhook_id = webhook_data&.dig("id")
+            webhook_data&.dig("signing_secret")
           end
 
           def load_fizzy_config
@@ -535,9 +535,9 @@ module Brainiac
             File.write(PROJECTS_FILE, JSON.pretty_generate(projects))
           end
 
-          def run_fizzy(*args)
+          def run_fizzy(*)
             require "open3"
-            output, status = Open3.capture2("fizzy", *args)
+            output, status = Open3.capture2("fizzy", *)
             status.success? ? output : nil
           rescue Errno::ENOENT
             nil
@@ -620,7 +620,6 @@ module Brainiac
         config = JSON.parse(File.read(config_file))
         config["authorized_users"] ||= []
 
-        # Don't add if already present
         existing = config["authorized_users"].find { |u| u["id"] == user_id || u["name"]&.downcase == display_name.downcase }
         if existing
           puts "  ✓ #{display_name} already in authorized_users (id: #{existing["id"]})"
