@@ -3,7 +3,7 @@
 module Brainiac
   module Plugins
     module Fizzy
-      VERSION = "0.0.17"
+      VERSION = "0.0.18"
     end
   end
 end

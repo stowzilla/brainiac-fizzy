@@ -78,7 +78,7 @@ module Brainiac
             reload_projects!
             reload_agent_registry!
 
-            status_code, body = dispatch_webhook_action(action, payload)
+            status_code, body = dispatch_webhook_action(action, payload, board_key: board_key)
             LOG.info "[Fizzy] #{action} response: #{status_code} - #{body}"
             halt status_code, body
           rescue JSON::ParserError => e
@@ -175,7 +175,7 @@ module Brainiac
 
         public
 
-        def handle_publish_or_triage(action, payload)
+        def handle_publish_or_triage(action, payload, board_key: nil)
           eventable = payload["eventable"] || {}
           card_number = eventable["number"]&.to_s
 
@@ -189,10 +189,10 @@ module Brainiac
 
           if action == "card_published"
             assignees = eventable["assignees"] || []
-            return handle_card_assigned(payload) if assignees.any? { |a| local_agent_names.include?(a["name"]) }
+            return handle_card_assigned(payload, board_key: board_key) if assignees.any? { |a| local_agent_names.include?(a["name"]) }
           end
 
-          handle_card_published(payload)
+          handle_card_published(payload, board_key: board_key)
         end
       end
     end

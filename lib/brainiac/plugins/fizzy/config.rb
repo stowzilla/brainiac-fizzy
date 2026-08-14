@@ -92,7 +92,7 @@ module Brainiac
             user && user["human"]
           end
 
-          def identify_project_by_tags(tags)
+          def identify_project_by_tags(tags, board_key: nil)
             tag_names = tags.map { |t| t.is_a?(Hash) ? t["name"] : t.to_s }.map(&:downcase)
 
             PROJECTS.each do |key, config|
@@ -100,7 +100,21 @@ module Brainiac
               return [key, config] if tag_names.intersect?(project_tags)
             end
 
-            # Fall back to default project
+            # Fall back to board's default_project if configured
+            if board_key
+              board_config = @boards[board_key]
+              if board_config && board_config["default_project"]
+                project_key = board_config["default_project"]
+                return [project_key, PROJECTS[project_key]] if PROJECTS.key?(project_key)
+              end
+
+              # Fall back to any project whose fizzy_board matches this board_key
+              PROJECTS.each do |key, config|
+                return [key, config] if config["fizzy_board"] == board_key
+              end
+            end
+
+            # Fall back to global default project
             default_key = default_project_key
             default_key ? [default_key, PROJECTS[default_key]] : nil
           end

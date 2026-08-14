@@ -72,8 +72,8 @@ def verify_signature!(request, payload_body, board_key: nil)
 end
 
 # Config delegators
-def identify_project_by_tags(tags)
-  Brainiac::Plugins::Fizzy::Config.identify_project_by_tags(tags)
+def identify_project_by_tags(tags, board_key: nil)
+  Brainiac::Plugins::Fizzy::Config.identify_project_by_tags(tags, board_key: board_key)
 end
 
 def board_config(board_key)
@@ -114,14 +114,14 @@ end
 
 # Webhook dispatch — routes incoming actions to the appropriate handler.
 # Called from within the Sinatra route block, so it must be a top-level method.
-def dispatch_webhook_action(action, payload)
+def dispatch_webhook_action(action, payload, board_key: nil)
   case action
   when "card_assigned"
-    handle_card_assigned(payload)
+    handle_card_assigned(payload, board_key: board_key)
   when "comment_created"
-    handle_comment(payload)
+    handle_comment(payload, board_key: board_key)
   when "card_published", "card_triaged"
-    Brainiac::Plugins::Fizzy.handle_publish_or_triage(action, payload)
+    Brainiac::Plugins::Fizzy.handle_publish_or_triage(action, payload, board_key: board_key)
   else
     LOG.info "[Fizzy] Ignoring unknown action: #{action}"
     [200, { status: "ignored", action: action }.to_json]

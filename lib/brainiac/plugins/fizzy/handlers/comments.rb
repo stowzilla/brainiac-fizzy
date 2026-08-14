@@ -21,7 +21,7 @@ CommentContext = Struct.new(
   keyword_init: true
 )
 
-def handle_comment(payload)
+def handle_comment(payload, board_key: nil)
   eventable = payload["eventable"] || {}
   plain_text = eventable.dig("body", "plain_text") || ""
   card_internal_id = eventable.dig("card", "id")
@@ -44,7 +44,7 @@ def handle_comment(payload)
   card_info = lookup_fizzy_card_info(card_internal_id)
   comment_id = eventable["id"]
 
-  project_config, project_key = resolve_fizzy_project(card_info, card_internal_id, eventable)
+  project_config, project_key = resolve_fizzy_project(card_info, card_internal_id, eventable, board_key: board_key)
   return [200, { status: "ignored", reason: "no matching project" }.to_json] unless project_config
 
   tags = parse_inline_tags(plain_text)
@@ -285,14 +285,14 @@ def handle_cancel_command(eventable, card_internal_id)
   [200, { status: "cancelled", card: card_number_for_cancel || card_internal_id, sessions_killed: killed }.to_json]
 end
 
-def resolve_fizzy_project(card_info, card_internal_id, eventable)
+def resolve_fizzy_project(card_info, card_internal_id, eventable, board_key: nil)
   if card_info
     if card_info["project"]
       project_key = card_info["project"]
       project_config = PROJECTS[project_key] || DEFAULT_PROJECT
     else
       card_tags = eventable.dig("card", "tags") || []
-      project_result = identify_project_by_tags(card_tags)
+      project_result = identify_project_by_tags(card_tags, board_key: board_key)
       if project_result
         project_key, project_config = project_result
         card_info["project"] = project_key
@@ -305,7 +305,7 @@ def resolve_fizzy_project(card_info, card_internal_id, eventable)
     end
   else
     card_tags = eventable.dig("card", "tags") || []
-    project_result = identify_project_by_tags(card_tags)
+    project_result = identify_project_by_tags(card_tags, board_key: board_key)
     if project_result
       project_key, project_config = project_result
     else
