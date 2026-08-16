@@ -92,8 +92,8 @@ module Brainiac
             nil
           end
 
-          def move_card_to_column(card_number, column_name, project_config:, agent_name: nil)
-            board_key = Config.board_key_for_project(project_config)
+          def move_card_to_column(card_number, column_name, project_config:, agent_name: nil, board_key: nil)
+            board_key ||= Config.board_key_for_project(project_config)
             column_id = Config.board_column_id(board_key, column_name) if board_key
             return unless column_id
 

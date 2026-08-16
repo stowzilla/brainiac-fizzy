@@ -38,7 +38,8 @@ module Brainiac
               unless ctx[:skip_column_move] || work_item_merged?(card_number)
                 Helpers.move_card_to_column(card_number, "needs_review",
                                             project_config: ctx[:project_config],
-                                            agent_name: ctx[:agent_name])
+                                            agent_name: ctx[:agent_name],
+                                            board_key: ctx[:source_context]&.dig(:board_key))
                 record_self_move(card_number)
               end
 

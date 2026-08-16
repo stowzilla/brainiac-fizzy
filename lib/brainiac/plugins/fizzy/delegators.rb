@@ -29,8 +29,8 @@ def fetch_intent_context(card_number, repo_path:, agent_name: nil)
   Brainiac::Plugins::Fizzy::Helpers.fetch_intent_context(card_number, repo_path: repo_path, agent_name: agent_name)
 end
 
-def move_card_to_column(card_number, column_name, project_config:, agent_name: nil)
-  Brainiac::Plugins::Fizzy::Helpers.move_card_to_column(card_number, column_name, project_config: project_config, agent_name: agent_name)
+def move_card_to_column(card_number, column_name, project_config:, agent_name: nil, board_key: nil)
+  Brainiac::Plugins::Fizzy::Helpers.move_card_to_column(card_number, column_name, project_config: project_config, agent_name: agent_name, board_key: board_key)
 end
 
 def append_fizzy_comment_footer(card_number, project_config:, agent_name: nil, since: nil)

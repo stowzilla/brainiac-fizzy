@@ -62,7 +62,7 @@ def handle_card_assigned(payload, board_key: nil)
     card_number: card_number, card_internal_id: card_internal_id, title: title, tags: tags,
     branch: branch, worktree_path: worktree_path, project_config: project_config, project_key: project_key,
     agent_name: assigned_agent, model: initial_model,
-    effort: initial_effort, cli_provider_override: initial_cli
+    effort: initial_effort, cli_provider_override: initial_cli, board_key: board_key
   )
 end
 
@@ -123,7 +123,7 @@ def setup_assigned_worktree(repo_path, branch, card_internal_id, card_number, pr
 end
 
 def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branch:, worktree_path:,
-                           project_config:, project_key:, agent_name:, model:, effort:, cli_provider_override:)
+                           project_config:, project_key:, agent_name:, model:, effort:, cli_provider_override:, board_key: nil)
   card_context = prefetch_card_context(card_number, repo_path: project_config["repo_path"], agent_name: agent_name)
   planning_info = detect_planning_mode(text: title, tags: tags, card_internal_id: card_internal_id, card_number: card_number)
 
@@ -152,11 +152,11 @@ def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branc
                             project_config: project_config, chdir: worktree_path,
                             log_name: "assigned-#{card_number}", model: model, effort: effort,
                             agent_name: agent_name, card_number: card_number, source: :fizzy,
-                            source_context: { card_number: card_number, dispatched_at: Time.now },
+                            source_context: { card_number: card_number, board_key: board_key, dispatched_at: Time.now },
                             cli_provider: cli_provider_override)
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: agent_name)
 
-  Thread.new { move_card_to_column(card_number, "right_now", project_config: project_config, agent_name: agent_name) }
+  Thread.new { move_card_to_column(card_number, "right_now", project_config: project_config, agent_name: agent_name, board_key: board_key) }
 
   [200, { status: "processed", card: card_number, branch: branch, project: project_key, agent: agent_name }.to_json]
 end

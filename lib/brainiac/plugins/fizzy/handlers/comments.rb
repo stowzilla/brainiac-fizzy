@@ -18,6 +18,7 @@ CommentContext = Struct.new(
   :project_config, :project_key, :card_number, :worktree,
   :model, :effort, :deploy_intent, :cli_provider_override,
   :comment_vars, :card_tags, :worktree_override, :fresh,
+  :board_key,
   keyword_init: true
 )
 
@@ -67,7 +68,7 @@ def handle_comment(payload, board_key: nil)
     card_info: card_info, comment_id: comment_id, creator_name: creator_name,
     creator_is_agent: creator_is_agent, mentioned_agent: mentioned_agent,
     agent_name: agent_name, is_cross_agent_mention: is_cross_agent_mention,
-    project_config: project_config, project_key: project_key
+    project_config: project_config, project_key: project_key, board_key: board_key
   )
 
   # --- Intent gate (mirrors brainiac-discord pattern) ---
@@ -101,7 +102,7 @@ end
 
 def build_comment_context(eventable:, plain_text:, tags:, card_internal_id:, card_info:, comment_id:, creator_name:,
                           creator_is_agent:, mentioned_agent:, agent_name:, is_cross_agent_mention:,
-                          project_config:, project_key:)
+                          project_config:, project_key:, board_key: nil)
   deploy_intent = tags[:deploy_intent]
   LOG.info "[Deploy] Detected [deploy#{":#{deploy_intent}" unless deploy_intent == :auto}] tag on card #{card_internal_id}" if deploy_intent
 
@@ -137,6 +138,7 @@ def build_comment_context(eventable:, plain_text:, tags:, card_internal_id:, car
     creator_is_agent: creator_is_agent, mentioned_agent: mentioned_agent,
     agent_name: agent_name, is_cross_agent_mention: is_cross_agent_mention,
     project_config: project_config, project_key: project_key,
+    board_key: board_key,
     model: effective_model,
     effort: effective_effort,
     deploy_intent: deploy_intent,
@@ -554,13 +556,13 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
                             source: :fizzy, cli_provider: ctx.cli_provider_override, resume: should_resume,
                             source_context: {
                               card_number: card_number, card_internal_id: ctx.card_internal_id,
-                              deploy_intent: ctx.deploy_intent, dispatched_at: Time.now
+                              deploy_intent: ctx.deploy_intent, board_key: ctx.board_key, dispatched_at: Time.now
                             })
   return [200, { status: "dispatch_failed", agent: ctx.agent_name, card: card_number }.to_json] unless pid
 
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: ctx.agent_name)
 
-  Thread.new { move_card_to_column(card_number, "right_now", project_config: ctx.project_config, agent_name: ctx.agent_name) }
+  Thread.new { move_card_to_column(card_number, "right_now", project_config: ctx.project_config, agent_name: ctx.agent_name, board_key: ctx.board_key) }
 
   { status: "follow_up", card: card_number, card_internal_id: ctx.card_internal_id,
     worktree: work_dir, project: ctx.project_key }
