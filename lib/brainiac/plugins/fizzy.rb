@@ -171,6 +171,27 @@ module Brainiac
             LOG.info "[Fizzy:Deploy] #{env_key} marked deploying via API"
             { status: "deploying", env: env_key }.to_json
           end
+
+          app.post "/api/deployments/:env/failed" do
+            content_type :json
+            env_key = params["env"]
+            config = DEPLOYMENTS_CONFIG["environments"] || {}
+            halt 404, { error: "Unknown environment: #{env_key}" }.to_json unless config.key?(env_key)
+            request.body.rewind
+            payload = begin
+              JSON.parse(request.body.read)
+            rescue StandardError
+              {}
+            end
+            state = load_deployment_state
+            state[env_key] ||= {}
+            state[env_key]["last_deploy_status"] = "failed"
+            state[env_key]["last_deploy_at"] = Time.now.iso8601
+            save_deployment_state(state)
+            DEPLOYMENT_STATE.replace(state)
+            LOG.info "[Fizzy:Deploy] #{env_key} marked failed via API"
+            { status: "failed", env: env_key }.to_json
+          end
         end
 
         public
