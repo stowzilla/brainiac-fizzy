@@ -44,7 +44,7 @@ def handle_card_assigned(payload, board_key: nil)
            "creating worktree: #{branch} (model: #{detect_model(project_config, tags: tags) || "default"})"
 
   react_to_assignment(card_number, repo_path, assigned_agent)
-  worktree_path = setup_assigned_worktree(repo_path, branch, card_internal_id, card_number, project_key, assigned_agent)
+  worktree_path = setup_assigned_worktree(repo_path, branch, card_internal_id, card_number, project_key, assigned_agent, board_key: board_key)
 
   initial_cli = detect_cli_provider(tags: tags)
   initial_model = detect_model(project_config, tags: tags)
@@ -110,14 +110,17 @@ def react_to_assignment(card_number, repo_path, agent_name)
   end
 end
 
-def setup_assigned_worktree(repo_path, branch, card_internal_id, card_number, project_key, agent_name)
+def setup_assigned_worktree(repo_path, branch, card_internal_id, card_number, project_key, agent_name, board_key: nil)
   debounced_repo_fetch(repo_path)
   worktree_path = File.join(File.dirname(repo_path), "#{File.basename(repo_path)}--#{branch}")
   worktree_path = create_or_reuse_worktree(repo_path: repo_path, branch: branch, worktree_path: worktree_path)
 
+  source_data = { "card_internal_id" => card_internal_id, "card_number" => card_number }
+  source_data["board_key"] = board_key if board_key
+
   register_work_item(
     branch: branch, worktree: worktree_path, project: project_key, agent: agent_name,
-    source: :fizzy, source_data: { "card_internal_id" => card_internal_id, "card_number" => card_number }
+    source: :fizzy, source_data: source_data
   )
   worktree_path
 end

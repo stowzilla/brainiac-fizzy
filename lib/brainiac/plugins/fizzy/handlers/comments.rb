@@ -499,9 +499,12 @@ def setup_new_mention_worktree(ctx, card_number, card_title)
   repo_path = ctx.project_config["repo_path"]
   worktree_path, branch = resolve_or_create_worktree(ctx, card_number, card_title, repo_path)
 
+  source_data = { "card_internal_id" => ctx.card_internal_id, "card_number" => card_number }
+  source_data["board_key"] = ctx.board_key if ctx.board_key
+
   register_work_item(
     branch: branch, worktree: worktree_path, project: ctx.project_key, agent: ctx.agent_name,
-    source: :fizzy, source_data: { "card_internal_id" => ctx.card_internal_id, "card_number" => card_number }
+    source: :fizzy, source_data: source_data
   )
 
   [worktree_path, branch]

@@ -130,6 +130,7 @@ module Brainiac
               card_agent = card_info["agent"]
               env = Helpers.fizzy_env_for(card_agent)
               repo_path = ctx[:repo_path]
+              board_key = card_info.dig("sources", "fizzy", "board_key") || Config.board_key_for_project(ctx[:project_config])
 
               # Post PR link comment
               pr_url = ctx[:pr_url]
@@ -143,7 +144,8 @@ module Brainiac
               # Move card to UAT
               Helpers.move_card_to_column(card_number, "uat",
                                           project_config: ctx[:project_config],
-                                          agent_name: card_agent)
+                                          agent_name: card_agent,
+                                          board_key: board_key)
               record_self_move(card_number)
 
               # Clear deployment tracking
