@@ -365,7 +365,8 @@ module Brainiac
               board_id = board_config["board_id"]
               next unless board_id
 
-              output = run_cmd("fizzy", "webhook", "list", "--board", board_id, "--all", "--json", env: env)
+              output = run_cmd("fizzy", "webhook", "list", "--board", board_id, "--all", "--json",
+                              chdir: Dir.home, env: env)
               webhooks = JSON.parse(output)["data"] || []
 
               webhooks.each do |webhook|
@@ -373,7 +374,8 @@ module Brainiac
                 next if webhook["active"]
 
                 LOG.info "[Fizzy] Reactivating webhook '#{webhook["name"]}' on board '#{board_key}' (was inactive)"
-                run_cmd("fizzy", "webhook", "reactivate", webhook["id"], "--board", board_id, env: env)
+                run_cmd("fizzy", "webhook", "reactivate", webhook["id"], "--board", board_id,
+                        chdir: Dir.home, env: env)
               end
             rescue StandardError => e
               LOG.warn "[Fizzy] Could not check webhooks for board '#{board_key}': #{e.message}"
