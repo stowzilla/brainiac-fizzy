@@ -360,7 +360,13 @@ module Brainiac
             boards = Config.boards
             return if boards.empty?
 
-            env = Helpers.default_fizzy_env
+            admin_token = Config.current["admin_token"]
+            unless admin_token
+              LOG.debug "[Fizzy] Webhook reactivation check skipped (no admin_token in fizzy.json)"
+              return
+            end
+
+            env = { "FIZZY_TOKEN" => admin_token }
             boards.each do |board_key, board_config|
               board_id = board_config["board_id"]
               next unless board_id
@@ -371,7 +377,7 @@ module Brainiac
               unless status.success?
                 parsed = JSON.parse(stdout) rescue nil
                 if parsed&.dig("code") == "forbidden"
-                  LOG.debug "[Fizzy] Webhook check skipped for board '#{board_key}' (token lacks webhook permission)"
+                  LOG.warn "[Fizzy] Webhook check failed for board '#{board_key}' (admin_token lacks permission)"
                 else
                   LOG.warn "[Fizzy] Could not check webhooks for board '#{board_key}': exit #{status.exitstatus}"
                 end
