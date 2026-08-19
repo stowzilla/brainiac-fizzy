@@ -365,10 +365,20 @@ module Brainiac
               board_id = board_config["board_id"]
               next unless board_id
 
-              output = run_cmd("fizzy", "webhook", "list", "--board", board_id, "--all", "--json",
-                              chdir: Dir.home, env: env)
-              webhooks = JSON.parse(output)["data"] || []
+              stdout, _stderr, status = Open3.capture3(env, "fizzy", "webhook", "list",
+                                                       "--board", board_id, "--all", "--json",
+                                                       chdir: Dir.home)
+              unless status.success?
+                parsed = JSON.parse(stdout) rescue nil
+                if parsed&.dig("code") == "forbidden"
+                  LOG.debug "[Fizzy] Webhook check skipped for board '#{board_key}' (token lacks webhook permission)"
+                else
+                  LOG.warn "[Fizzy] Could not check webhooks for board '#{board_key}': exit #{status.exitstatus}"
+                end
+                next
+              end
 
+              webhooks = (JSON.parse(stdout)["data"] || [])
               webhooks.each do |webhook|
                 next unless webhook["name"]&.start_with?("brainiac")
                 next if webhook["active"]
