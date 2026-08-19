@@ -48,6 +48,17 @@ module Brainiac
                                                                   agent_name: ctx[:agent_name],
                                                                   since: ctx[:source_context]&.dig(:dispatched_at))
 
+              # Retry once after a short delay to account for Fizzy API propagation.
+              # The agent may have posted its comment just before exiting, and the API
+              # might not return it immediately in a list call.
+              if !found_comment
+                sleep 5
+                found_comment = Helpers.append_fizzy_comment_footer(card_number,
+                                                                    project_config: ctx[:project_config],
+                                                                    agent_name: ctx[:agent_name],
+                                                                    since: ctx[:source_context]&.dig(:dispatched_at))
+              end
+
               # If the agent didn't post any comment during this session, re-dispatch to summarize from memory.
               # Uses dispatched_at from source_context to only check for comments made during THIS session,
               # not previous sessions on the same card.

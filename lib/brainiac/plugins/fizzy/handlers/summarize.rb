@@ -111,14 +111,14 @@ module Brainiac
                                         project_config)
             Thread.new do
               wait_for_process_or_timeout(pid, timeout: 60)
-              sleep 2 # Brief pause to let any comment propagate
+              sleep 5 # Wait for Fizzy API propagation before checking
 
               unless agent_commented_on_card?(card_number, agent_name, repo_path: repo_path, since: session_started_at)
                 post_fallback_comment(card_number, branch, agent_name, project_config)
               end
             rescue Errno::ECHILD
               # Process already reaped by session manager — check for comment
-              sleep 2
+              sleep 5
               unless agent_commented_on_card?(card_number, agent_name, repo_path: repo_path, since: session_started_at)
                 post_fallback_comment(card_number, branch, agent_name, project_config)
               end
