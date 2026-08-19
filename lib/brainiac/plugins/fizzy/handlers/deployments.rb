@@ -33,6 +33,22 @@ end
 DEPLOYMENTS_CONFIG = load_deployments_config
 DEPLOYMENT_STATE   = load_deployment_state
 
+# Load work items as a card-map-compatible structure for deployment lookups.
+def load_card_map
+  map = load_work_item_map
+  map.transform_values do |entry|
+    {
+      "worktree" => entry["worktree"],
+      "branch" => entry["branch"],
+      "number" => entry.dig("sources", "fizzy", "card_number"),
+      "title" => entry.dig("sources", "fizzy", "card_title"),
+      "prs" => entry.dig("sources", "github", "prs") || []
+    }
+  end
+rescue StandardError
+  {}
+end
+
 def reload_deployments_config!(force: false)
   return unless file_changed?(DEPLOYMENTS_CONFIG_FILE, force: force)
 
