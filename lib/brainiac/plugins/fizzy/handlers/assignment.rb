@@ -146,10 +146,11 @@ def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branc
                 resolve_pr_target(repo_path: project_config["repo_path"], card_number: card_number, project_key: project_key)
               end
   template_vars["PR_TARGET_INSTRUCTION"] = if pr_target
-                                              "**IMPORTANT: Open the PR targeting the `#{pr_target}` branch (not main).** Use: `gh pr create --base #{pr_target}`"
-                                            else
-                                              ""
-                                            end
+                                             "**IMPORTANT: Open the PR targeting the `#{pr_target}` branch " \
+                                               "(not main).** Use: `gh pr create --base #{pr_target}`"
+                                           else
+                                             ""
+                                           end
   brain_ctx = build_brain_context(
     agent_name: agent_name, card_title: title,
     card_number: card_number, project_key: project_key, source: :fizzy
