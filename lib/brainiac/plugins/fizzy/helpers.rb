@@ -59,7 +59,7 @@ module Brainiac
           end
 
           def fetch_card_comments(card_number, repo_path:, env:)
-            output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, chdir: repo_path, env: env)
+            output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, "--all", chdir: repo_path, env: env)
             comments = JSON.parse(output)["data"] || []
             return "" if comments.empty?
 
@@ -77,7 +77,7 @@ module Brainiac
           # Returns a simple "author: message" format (last 5 comments).
           def fetch_intent_context(card_number, repo_path:, agent_name: nil)
             env = fizzy_env_for(agent_name || AI_AGENT_NAME)
-            output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, chdir: repo_path, env: env)
+            output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, "--all", chdir: repo_path, env: env)
             comments = JSON.parse(output)["data"] || []
             return nil if comments.empty?
 
@@ -106,7 +106,7 @@ module Brainiac
             repo_path = project_config["repo_path"]
             env = fizzy_env_for(agent_name || AI_AGENT_NAME)
 
-            output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, chdir: repo_path, env: env)
+            output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, "--all", chdir: repo_path, env: env)
             comments = JSON.parse(output)["data"] || []
             agent_display = agent_display_name(agent_name || AI_AGENT_NAME)
 

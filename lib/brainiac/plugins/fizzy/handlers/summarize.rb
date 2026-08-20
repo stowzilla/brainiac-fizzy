@@ -50,7 +50,7 @@ module Brainiac
 
           def agent_commented_on_card?(card_number, agent_name, repo_path:, since: nil)
             env = Helpers.fizzy_env_for(agent_name)
-            output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, chdir: repo_path, env: env)
+            output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, "--all", chdir: repo_path, env: env)
             comments = JSON.parse(output)["data"] || []
             agent_display = agent_display_name(agent_name)
 
