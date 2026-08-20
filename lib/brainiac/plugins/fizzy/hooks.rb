@@ -51,7 +51,7 @@ module Brainiac
               # Retry once after a short delay to account for Fizzy API propagation.
               # The agent may have posted its comment just before exiting, and the API
               # might not return it immediately in a list call.
-              if !found_comment
+              unless found_comment
                 sleep 5
                 found_comment = Helpers.append_fizzy_comment_footer(card_number,
                                                                     project_config: ctx[:project_config],
@@ -375,7 +375,11 @@ module Brainiac
                                                        "--board", board_id, "--all", "--json",
                                                        chdir: Dir.home)
               unless status.success?
-                parsed = JSON.parse(stdout) rescue nil
+                parsed = begin
+                  JSON.parse(stdout)
+                rescue StandardError
+                  nil
+                end
                 if parsed&.dig("code") == "forbidden"
                   LOG.warn "[Fizzy] Webhook check failed for board '#{board_key}' (admin_token lacks permission)"
                 else
@@ -384,7 +388,7 @@ module Brainiac
                 next
               end
 
-              webhooks = (JSON.parse(stdout)["data"] || [])
+              webhooks = JSON.parse(stdout)["data"] || []
               webhooks.each do |webhook|
                 next unless webhook["name"]&.start_with?("brainiac")
                 next if webhook["active"]

@@ -565,7 +565,9 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
 
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: ctx.agent_name)
 
-  Thread.new { move_card_to_column(card_number, "right_now", project_config: ctx.project_config, agent_name: ctx.agent_name, board_key: ctx.board_key) }
+  Thread.new do
+    move_card_to_column(card_number, "right_now", project_config: ctx.project_config, agent_name: ctx.agent_name, board_key: ctx.board_key)
+  end
 
   { status: "follow_up", card: card_number, card_internal_id: ctx.card_internal_id,
     worktree: work_dir, project: ctx.project_key }

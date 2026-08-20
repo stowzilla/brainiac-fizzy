@@ -178,7 +178,7 @@ module Brainiac
             config = DEPLOYMENTS_CONFIG["environments"] || {}
             halt 404, { error: "Unknown environment: #{env_key}" }.to_json unless config.key?(env_key)
             request.body.rewind
-            payload = begin
+            begin
               JSON.parse(request.body.read)
             rescue StandardError
               {}

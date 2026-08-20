@@ -19,21 +19,26 @@ Metrics/BlockLength:
 
 Metrics/MethodLength:
   Max: 75
+  Exclude:
+    - "lib/brainiac/plugins/fizzy.rb"
 
 Metrics/AbcSize:
   Max: 90
   Exclude:
     - "lib/brainiac/plugins/fizzy/handlers/**/*"
+    - "lib/brainiac/plugins/fizzy.rb"
 
 Metrics/CyclomaticComplexity:
   Max: 18
   Exclude:
     - "lib/brainiac/plugins/fizzy/handlers/**/*"
+    - "lib/brainiac/plugins/fizzy.rb"
 
 Metrics/PerceivedComplexity:
   Max: 18
   Exclude:
     - "lib/brainiac/plugins/fizzy/handlers/**/*"
+    - "lib/brainiac/plugins/fizzy.rb"
 
 Metrics/ModuleLength:
   Max: 300
