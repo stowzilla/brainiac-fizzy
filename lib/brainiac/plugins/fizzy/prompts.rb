@@ -59,6 +59,7 @@ module Brainiac
           You have been assigned Fizzy card #{{CARD_NUMBER}}: "{{CARD_TITLE}}".
           You are on branch "{{BRANCH}}" in a fresh worktree.
           Implement the task, commit, push, and open a PR (link back to Fizzy).
+          {{PR_TARGET_INSTRUCTION}}
 
           **Response destination: Post your response as a comment on Fizzy card #{{CARD_NUMBER}}.**
           Your comment MUST include a concise summary of what you did, a PR link, and the branch name.

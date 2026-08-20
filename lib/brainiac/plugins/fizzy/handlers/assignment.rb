@@ -113,7 +113,13 @@ end
 def setup_assigned_worktree(repo_path, branch, card_internal_id, card_number, project_key, agent_name, board_key: nil)
   debounced_repo_fetch(repo_path)
   worktree_path = File.join(File.dirname(repo_path), "#{File.basename(repo_path)}--#{branch}")
-  worktree_path = create_or_reuse_worktree(repo_path: repo_path, branch: branch, worktree_path: worktree_path)
+
+  # Allow plugins (e.g., brainiac-basecamp) to override the base branch for epic workflows.
+  base_ref = if defined?(resolve_base_branch)
+               resolve_base_branch(repo_path: repo_path, card_number: card_number, project_key: project_key)
+             end
+
+  worktree_path = create_or_reuse_worktree(repo_path: repo_path, branch: branch, base_ref: base_ref, worktree_path: worktree_path)
 
   source_data = { "card_internal_id" => card_internal_id, "card_number" => card_number }
   source_data["board_key"] = board_key if board_key
@@ -134,6 +140,16 @@ def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branc
     "CARD_NUMBER" => card_number, "CARD_TITLE" => title,
     "BRANCH" => branch, "COMMENT_CREATOR" => agent_name
   }
+
+  # Resolve custom PR target (for epic branch workflows)
+  pr_target = if defined?(resolve_pr_target)
+                resolve_pr_target(repo_path: project_config["repo_path"], card_number: card_number, project_key: project_key)
+              end
+  template_vars["PR_TARGET_INSTRUCTION"] = if pr_target
+                                              "**IMPORTANT: Open the PR targeting the `#{pr_target}` branch (not main).** Use: `gh pr create --base #{pr_target}`"
+                                            else
+                                              ""
+                                            end
   brain_ctx = build_brain_context(
     agent_name: agent_name, card_title: title,
     card_number: card_number, project_key: project_key, source: :fizzy
