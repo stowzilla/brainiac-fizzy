@@ -170,14 +170,23 @@ module Brainiac
           end
 
           # PR review received — post status comment on card
+          # Only for changes_requested reviews that need action, not for approvals or gate reviews
           def register_pr_review_received
             Brainiac.on(:pr_review_received) do |ctx|
               card_number = ctx[:card_number]
               next unless card_number
 
+              # Only post status for changes_requested — approvals don't need a Fizzy comment
+              review_state = ctx[:review_state]
+              next unless review_state == "changes_requested"
+
+              # Skip if this is a gate agent review (handled by brainiac-basecamp)
+              reviewer = ctx[:reviewer]
+              next if reviewer&.match?(/-(brainiac|bot)\b/i)
+
               Thread.new do
                 env = Helpers.fizzy_env_for(ctx[:agent_name])
-                status_comment = "<p>🔄 Code review received from @#{ctx[:reviewer]}. Updates in progress...</p>"
+                status_comment = "<p>🔄 Code review received from @#{reviewer}. Updates in progress...</p>"
                 run_cmd("fizzy", "comment", "create", "--card", card_number.to_s, "--body", status_comment,
                         chdir: ctx[:repo_path], env: env)
               rescue StandardError => e
