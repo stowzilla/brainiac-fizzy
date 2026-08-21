@@ -142,13 +142,24 @@ def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branc
   }
 
   # Resolve custom PR target (for epic branch workflows)
+  LOG.info "[Fizzy:Debug] About to call resolve_pr_target with card_number=#{card_number.inspect}, project_key=#{project_key.inspect}" if defined?(LOG)
   pr_target = if defined?(resolve_pr_target)
-                resolve_pr_target(repo_path: project_config["repo_path"], card_number: card_number, project_key: project_key)
+                LOG.info "[Fizzy:Debug] resolve_pr_target IS defined" if defined?(LOG)
+                result = resolve_pr_target(repo_path: project_config["repo_path"], card_number: card_number, project_key: project_key)
+                LOG.info "[Fizzy:Debug] resolve_pr_target returned: #{result.inspect}" if defined?(LOG)
+                result
+              else
+                LOG.warn "[Fizzy:Debug] resolve_pr_target is NOT defined!" if defined?(LOG)
+                nil
               end
+  LOG.info "[Fizzy:Debug] pr_target=#{pr_target.inspect}" if defined?(LOG)
   template_vars["PR_TARGET_INSTRUCTION"] = if pr_target
-                                             "**IMPORTANT: Open the PR targeting the `#{pr_target}` branch " \
+                                             instruction = "**IMPORTANT: Open the PR targeting the `#{pr_target}` branch " \
                                                "(not main).** Use: `gh pr create --base #{pr_target}`"
+                                             LOG.info "[Fizzy:Debug] PR_TARGET_INSTRUCTION set to: #{instruction[0..80]}..." if defined?(LOG)
+                                             instruction
                                            else
+                                             LOG.info "[Fizzy:Debug] PR_TARGET_INSTRUCTION is empty (no pr_target)" if defined?(LOG)
                                              ""
                                            end
   brain_ctx = build_brain_context(
