@@ -142,27 +142,11 @@ def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branc
   }
 
   # Resolve custom PR target (for epic branch workflows)
-  LOG.info "[Fizzy:Debug] About to call resolve_pr_target with card_number=#{card_number.inspect}, project_key=#{project_key.inspect}" if defined?(LOG)
-  LOG.info "[Fizzy:Debug] defined?(resolve_pr_target) = #{defined?(resolve_pr_target).inspect}" if defined?(LOG)
-  LOG.info "[Fizzy:Debug] Kernel methods include resolve_pr_target? #{Kernel.private_method_defined?(:resolve_pr_target)}" if defined?(LOG)
-  LOG.info "[Fizzy:Debug] Object methods include resolve_pr_target? #{Object.method_defined?(:resolve_pr_target) || Object.private_method_defined?(:resolve_pr_target)}" if defined?(LOG)
-  # Try calling it directly regardless of defined? check
-  pr_target = begin
-                result = resolve_pr_target(repo_path: project_config["repo_path"], card_number: card_number, project_key: project_key)
-                LOG.info "[Fizzy:Debug] resolve_pr_target returned: #{result.inspect}" if defined?(LOG)
-                result
-              rescue NoMethodError, NameError => e
-                LOG.warn "[Fizzy:Debug] resolve_pr_target call failed: #{e.class}: #{e.message}" if defined?(LOG)
-                nil
-              end
-  LOG.info "[Fizzy:Debug] pr_target=#{pr_target.inspect}" if defined?(LOG)
+  pr_target = resolve_pr_target(repo_path: project_config["repo_path"], card_number: card_number, project_key: project_key)
   template_vars["PR_TARGET_INSTRUCTION"] = if pr_target
-                                             instruction = "**IMPORTANT: Open the PR targeting the `#{pr_target}` branch " \
+                                             "**IMPORTANT: Open the PR targeting the `#{pr_target}` branch " \
                                                "(not main).** Use: `gh pr create --base #{pr_target}`"
-                                             LOG.info "[Fizzy:Debug] PR_TARGET_INSTRUCTION set to: #{instruction[0..80]}..." if defined?(LOG)
-                                             instruction
                                            else
-                                             LOG.info "[Fizzy:Debug] PR_TARGET_INSTRUCTION is empty (no pr_target)" if defined?(LOG)
                                              ""
                                            end
   brain_ctx = build_brain_context(
