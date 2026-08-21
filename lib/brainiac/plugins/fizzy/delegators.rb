@@ -25,6 +25,10 @@ def prefetch_card_context(card_number, repo_path:, agent_name: nil)
   Brainiac::Plugins::Fizzy::Helpers.prefetch_card_context(card_number, repo_path: repo_path, agent_name: agent_name)
 end
 
+def resolve_github_agent_env(agent_name, github_repo)
+  Brainiac::Plugins::Fizzy::Helpers.resolve_github_agent_env(agent_name, github_repo)
+end
+
 def fetch_intent_context(card_number, repo_path:, agent_name: nil)
   Brainiac::Plugins::Fizzy::Helpers.fetch_intent_context(card_number, repo_path: repo_path, agent_name: agent_name)
 end

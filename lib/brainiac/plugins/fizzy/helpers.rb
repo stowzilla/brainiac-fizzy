@@ -33,6 +33,22 @@ module Brainiac
             fizzy_env_for(AI_AGENT_NAME)
           end
 
+          # Resolve GitHub App token for an agent so gh CLI runs as their bot identity.
+          # Uses brainiac-github's AppClient if available.
+          def resolve_github_agent_env(agent_name, github_repo)
+            return {} unless github_repo
+
+            if defined?(Brainiac::Plugins::Github::AppClient)
+              repo_owner = github_repo.split("/").first
+              token = Brainiac::Plugins::Github::AppClient.installation_token_for(agent_name, repo_owner: repo_owner)
+              return { "GH_TOKEN" => token } if token
+            end
+            {}
+          rescue StandardError => e
+            LOG.warn "[Fizzy] Could not resolve GitHub token for #{agent_name}: #{e.message}" if defined?(LOG)
+            {}
+          end
+
           def prefetch_card_context(card_number, repo_path:, agent_name: nil)
             env = fizzy_env_for(agent_name || AI_AGENT_NAME)
             card_details = fetch_card_details(card_number, repo_path: repo_path, env: env)

@@ -166,12 +166,17 @@ def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branc
            end
 
   card_key = "card-#{card_number}"
+
+  # Inject GitHub App token so agent's gh commands run as their bot identity
+  github_repo = project_config["github_repo"]
+  agent_github_env = resolve_github_agent_env(agent_name, github_repo)
+
   pid, log_file = run_agent(prompt,
                             project_config: project_config, chdir: worktree_path,
                             log_name: "assigned-#{card_number}", model: model, effort: effort,
                             agent_name: agent_name, card_number: card_number, source: :fizzy,
                             source_context: { card_number: card_number, board_key: board_key, dispatched_at: Time.now },
-                            cli_provider: cli_provider_override)
+                            cli_provider: cli_provider_override, env: agent_github_env)
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: agent_name)
 
   Thread.new { move_card_to_column(card_number, "right_now", project_config: project_config, agent_name: agent_name, board_key: board_key) }
