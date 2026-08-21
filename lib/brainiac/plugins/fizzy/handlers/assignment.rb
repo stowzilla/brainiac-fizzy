@@ -143,13 +143,16 @@ def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branc
 
   # Resolve custom PR target (for epic branch workflows)
   LOG.info "[Fizzy:Debug] About to call resolve_pr_target with card_number=#{card_number.inspect}, project_key=#{project_key.inspect}" if defined?(LOG)
-  pr_target = if defined?(resolve_pr_target)
-                LOG.info "[Fizzy:Debug] resolve_pr_target IS defined" if defined?(LOG)
+  LOG.info "[Fizzy:Debug] defined?(resolve_pr_target) = #{defined?(resolve_pr_target).inspect}" if defined?(LOG)
+  LOG.info "[Fizzy:Debug] Kernel methods include resolve_pr_target? #{Kernel.private_method_defined?(:resolve_pr_target)}" if defined?(LOG)
+  LOG.info "[Fizzy:Debug] Object methods include resolve_pr_target? #{Object.method_defined?(:resolve_pr_target) || Object.private_method_defined?(:resolve_pr_target)}" if defined?(LOG)
+  # Try calling it directly regardless of defined? check
+  pr_target = begin
                 result = resolve_pr_target(repo_path: project_config["repo_path"], card_number: card_number, project_key: project_key)
                 LOG.info "[Fizzy:Debug] resolve_pr_target returned: #{result.inspect}" if defined?(LOG)
                 result
-              else
-                LOG.warn "[Fizzy:Debug] resolve_pr_target is NOT defined!" if defined?(LOG)
+              rescue NoMethodError, NameError => e
+                LOG.warn "[Fizzy:Debug] resolve_pr_target call failed: #{e.class}: #{e.message}" if defined?(LOG)
                 nil
               end
   LOG.info "[Fizzy:Debug] pr_target=#{pr_target.inspect}" if defined?(LOG)
