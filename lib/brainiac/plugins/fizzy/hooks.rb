@@ -167,6 +167,43 @@ module Brainiac
             rescue StandardError => e
               LOG.error "[Fizzy] Error in pr_merged hook: #{e.message}" if defined?(LOG)
             end
+
+            # Also listen for epic branch merges (from brainiac-basecamp)
+            # Move card to UAT when merged to any tracked branch
+            Brainiac.on(:pr_merged_to_branch) do |ctx|
+              card_number = ctx[:card_number]
+              next unless card_number
+
+              # Find the work item to get card info
+              branch = ctx[:branch]
+              work_item = find_work_item_by_branch(branch) if respond_to?(:find_work_item_by_branch, true)
+              work_item ||= Object.respond_to?(:find_work_item_by_branch, true) ? Object.send(:find_work_item_by_branch, branch) : nil
+
+              next unless work_item
+
+              _internal_id, card_info = work_item
+              card_agent = card_info["agent"]
+              board_key = card_info.dig("sources", "fizzy", "board_key")
+
+              # Load project config
+              project_key = card_info.dig("sources", "fizzy", "project") || card_info["project"]
+              projects_file = File.join(ENV.fetch("BRAINIAC_DIR", File.join(Dir.home, ".brainiac")), "projects.json")
+              projects = File.exist?(projects_file) ? JSON.parse(File.read(projects_file)) : {}
+              project_config = projects[project_key] || {}
+              repo_path = project_config["repo_path"]
+
+              next unless repo_path
+
+              # Move card to UAT (same as main merge)
+              LOG.info "[Fizzy] PR merged to #{ctx[:base_branch]} for card ##{card_number} — moving to UAT" if defined?(LOG)
+              Helpers.move_card_to_column(card_number, "uat",
+                                          project_config: project_config,
+                                          agent_name: card_agent,
+                                          board_key: board_key)
+              record_self_move(card_number)
+            rescue StandardError => e
+              LOG.error "[Fizzy] Error in pr_merged_to_branch hook: #{e.message}" if defined?(LOG)
+            end
           end
 
           # PR review received — post status comment on card
