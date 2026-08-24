@@ -658,8 +658,73 @@ module Brainiac
       end
 
       # Subcommand names for bash completion.
-      def self.completions
-        %w[config status setup]
+      # When called with no args, returns top-level subcommands.
+      # When called with args (the words typed so far after the plugin name),
+      # returns context-sensitive completions for nested subcommands.
+      def self.completions(args = [])
+        return %w[board config setup status] if args.empty?
+
+        case args[0]
+        when "board"
+          board_completions(args[1..])
+        else
+          []
+        end
+      end
+
+      # Nested completions for `brainiac fizzy board ...`
+      def self.board_completions(args)
+        board_subcommands = %w[assign columns list ls setup webhook]
+        return board_subcommands if args.empty?
+
+        case args[0]
+        when "assign"
+          board_assign_completions(args[1..])
+        when "columns", "webhook"
+          board_key_completions(args[1..])
+        else
+          []
+        end
+      end
+
+      # Completions for `brainiac fizzy board assign <project> <board>`
+      def self.board_assign_completions(args)
+        case args.length
+        when 0
+          load_project_keys
+        when 1
+          load_board_keys
+        else
+          []
+        end
+      end
+
+      # Completions for commands that take a board key as next arg
+      def self.board_key_completions(args)
+        return load_board_keys if args.empty?
+
+        []
+      end
+
+      # Load board keys from fizzy.json for completion
+      def self.load_board_keys
+        config_file = File.join(ENV.fetch("BRAINIAC_DIR", File.join(Dir.home, ".brainiac")), "fizzy.json")
+        return [] unless File.exist?(config_file)
+
+        config = JSON.parse(File.read(config_file))
+        (config["boards"] || {}).keys
+      rescue StandardError
+        []
+      end
+
+      # Load project keys from projects.json for completion
+      def self.load_project_keys
+        projects_file = File.join(ENV.fetch("BRAINIAC_DIR", File.join(Dir.home, ".brainiac")), "projects.json")
+        return [] unless File.exist?(projects_file)
+
+        JSON.parse(File.read(projects_file)).keys
+      rescue StandardError
+        []
       end
 
       # Called by brainiac CLI after `agent create` — prompts for Fizzy user ID.
