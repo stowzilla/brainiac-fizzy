@@ -140,9 +140,11 @@ module Brainiac
             last_agent_comment = agent_comments.last
             return false unless last_agent_comment
 
-            # Append footer if applicable
+            # Append footer if applicable.
+            # Check for both <em>Branch: (footer format) and <strong>Branch:</strong> (agent inline format)
+            # to avoid duplicating the branch line when the agent already included it in the comment body.
             body = last_agent_comment.dig("body", "html") || ""
-            unless body.include?("<em>Branch:")
+            unless body.include?("<em>Branch:") || body.match?(%r{<strong>Branch:</strong>\s*<code>})
               branch = detect_branch_from_comment(body, card_number)
               if branch
                 pr_url = detect_pr_url(branch, project_config)
@@ -300,6 +302,19 @@ module Brainiac
             repo = project_config["github_repo"]
             return nil unless repo
 
+            repo_path = project_config["repo_path"]
+
+            # Try to find an existing open PR for this branch
+            begin
+              output = run_cmd("gh", "pr", "view", branch, "--repo", repo, "--json", "url", "--jq", ".url",
+                               chdir: repo_path, env: {})
+              url = output.strip
+              return url unless url.empty?
+            rescue StandardError
+              # gh pr view fails if no PR exists — fall through to "new PR" URL
+            end
+
+            # Fallback: link to open a new PR
             "https://github.com/#{repo}/pull/new/#{branch}"
           end
         end
