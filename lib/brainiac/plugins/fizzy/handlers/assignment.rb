@@ -58,6 +58,17 @@ def handle_card_assigned(payload, board_key: nil)
     inline_effort: initial_effort
   )
 
+  # Create ephemeral Belt environment if card has deploy tag and it's a Belt app
+  has_deploy_tag = tags.any? do |tag|
+    name = (tag.is_a?(Hash) ? tag["name"] : tag).to_s.downcase
+    name == "deploy"
+  end
+  if has_deploy_tag
+    maybe_create_ephemeral_belt_env(
+      worktree_path: worktree_path, card_number: card_number, project_key: project_key
+    )
+  end
+
   dispatch_assigned_card(
     card_number: card_number, card_internal_id: card_internal_id, title: title, tags: tags,
     branch: branch, worktree_path: worktree_path, project_config: project_config, project_key: project_key,
@@ -182,4 +193,73 @@ def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branc
   Thread.new { move_card_to_column(card_number, "right_now", project_config: project_config, agent_name: agent_name, board_key: board_key) }
 
   [200, { status: "processed", card: card_number, branch: branch, project: project_key, agent: agent_name }.to_json]
+end
+
+# Create an ephemeral Belt environment for a card if:
+# 1. The project has a parent environment configured
+# 2. The worktree is a Belt application
+# 3. Ephemeral deploys are enabled in basecamp.json
+#
+# This runs in the background to not block agent dispatch.
+def maybe_create_ephemeral_belt_env(worktree_path:, card_number:, project_key:)
+  Thread.new do
+    # Check if Belt utilities are available (loaded from brainiac core)
+    unless defined?(BeltHelpers) && defined?(BeltConfig) && defined?(BeltEnvironment)
+      LOG.debug "[EphemeralEnv] Belt utilities not available — skipping ephemeral env creation"
+      next
+    end
+
+    # Check if this is a Belt app
+    unless belt_app?(worktree_path)
+      LOG.debug "[EphemeralEnv] #{project_key} is not a Belt app — skipping ephemeral env"
+      next
+    end
+
+    # Check if ephemeral deploys are enabled
+    unless BeltConfig.ephemeral_deploys_enabled?
+      LOG.info "[EphemeralEnv] Ephemeral deploys disabled in basecamp.json"
+      next
+    end
+
+    # Get the parent environment for this project
+    parent_env = BeltConfig.parent_env_for(project_key)
+    unless parent_env
+      LOG.info "[EphemeralEnv] No parent env configured for #{project_key} in basecamp.json deploy.project_envs"
+      next
+    end
+
+    env_name = BeltConfig.ephemeral_env_for_card(card_number)
+
+    # Check if environment already exists (re-assignment scenario)
+    if BeltConfig.ephemeral_env?(env_name)
+      LOG.info "[EphemeralEnv] Environment #{env_name} already exists — skipping creation"
+      next
+    end
+
+    LOG.info "[EphemeralEnv] Creating ephemeral environment '#{env_name}' from '#{parent_env}' for card ##{card_number}"
+
+    # Create the environment
+    success = BeltEnvironment.create_environment(
+      worktree: worktree_path,
+      env_name: env_name,
+      parent_env: parent_env
+    )
+
+    if success
+      BeltConfig.track_ephemeral_env(env_name,
+                                     "card_number" => card_number,
+                                     "project" => project_key,
+                                     "parent_env" => parent_env,
+                                     "worktree" => worktree_path)
+      LOG.info "[EphemeralEnv] Successfully created and tracked environment '#{env_name}'"
+
+      # Deploy to the ephemeral environment
+      frontend_only = BeltEnvironment.frontend_only_changes?(worktree: worktree_path)
+      BeltEnvironment.deploy(worktree: worktree_path, env_name: env_name, frontend_only: frontend_only)
+    else
+      LOG.error "[EphemeralEnv] Failed to create environment '#{env_name}'"
+    end
+  rescue StandardError => e
+    LOG.error "[EphemeralEnv] Error creating ephemeral env: #{e.message}"
+  end
 end
