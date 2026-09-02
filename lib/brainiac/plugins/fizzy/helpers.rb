@@ -60,6 +60,37 @@ module Brainiac
             context
           end
 
+          # Normalize Fizzy tags from webhook hashes ({ "name" => "deploy" })
+          # or API strings ("deploy") into a lowercase name list.
+          def tag_names(tags)
+            Array(tags).filter_map do |tag|
+              name = tag.is_a?(Hash) ? (tag["name"] || tag[:name]) : tag
+              normalized = name.to_s.downcase
+              normalized unless normalized.empty?
+            end
+          end
+
+          def card_has_tag?(tags, name)
+            tag_names(tags).include?(name.to_s.downcase)
+          end
+
+          # Live tags from `fizzy card show`. Returns nil on failure so callers
+          # can fall back to webhook payload tags. Fizzy has no tag-added webhook;
+          # comment payloads may omit or stale-cache tags, so this is the source of truth.
+          def fetch_card_tags(card_number, repo_path:, env: nil)
+            return nil unless card_number && repo_path
+
+            env ||= default_fizzy_env
+            output = run_cmd("fizzy", "card", "show", card_number.to_s, chdir: repo_path, env: env)
+            card = JSON.parse(output)["data"]
+            return nil unless card
+
+            Array(card["tags"])
+          rescue StandardError => e
+            LOG.warn "[Fizzy] Could not fetch tags for card ##{card_number}: #{e.message}" if defined?(LOG)
+            nil
+          end
+
           def fetch_card_details(card_number, repo_path:, env:)
             output = run_cmd("fizzy", "card", "show", card_number.to_s, chdir: repo_path, env: env)
             card = JSON.parse(output)["data"]

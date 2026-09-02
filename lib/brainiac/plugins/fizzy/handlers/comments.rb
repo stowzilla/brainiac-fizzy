@@ -453,21 +453,13 @@ def handle_existing_card_comment(ctx)
   work_dir = worktree && File.directory?(worktree) ? worktree : ctx.project_config["repo_path"]
   card_key = "card-#{card_number || ctx.card_internal_id}"
 
+  # Fizzy has no tag-added webhook. On comment, fetch live tags and configure
+  # the Belt env in this worktree before dispatching (or queueing) the agent.
+  ensure_ephemeral_env_for_comment(ctx, card_number, worktree)
+
   # Session management (wait, supersede, or queue)
   queued = handle_session_conflict(ctx, card_key, card_number, work_dir)
   return queued if queued
-
-  # Create ephemeral Belt environment if card has deploy tag and env doesn't exist yet
-  # This handles the case where deploy tag was added after initial assignment
-  has_deploy_tag = (ctx.card_tags || []).any? do |tag|
-    name = (tag.is_a?(Hash) ? tag["name"] : tag).to_s.downcase
-    name == "deploy"
-  end
-  if has_deploy_tag && card_number && worktree && File.directory?(worktree)
-    maybe_create_ephemeral_belt_env(
-      worktree_path: worktree, card_number: card_number, project_key: ctx.project_key
-    )
-  end
 
   LOG.info "Follow-up comment on card #{card_number || ctx.card_internal_id} " \
            "(project: #{ctx.project_key}), worktree: #{work_dir}"
@@ -503,17 +495,7 @@ def handle_new_mention(ctx)
   react_to_comment(card_number, ctx.comment_id, ctx.project_config, ctx.agent_name, "👀")
 
   worktree_path, branch = setup_new_mention_worktree(ctx, card_number, card_title)
-
-  # Create ephemeral Belt environment if card has deploy tag
-  has_deploy_tag = (ctx.card_tags || []).any? do |tag|
-    name = (tag.is_a?(Hash) ? tag["name"] : tag).to_s.downcase
-    name == "deploy"
-  end
-  if has_deploy_tag && card_number && worktree_path
-    maybe_create_ephemeral_belt_env(
-      worktree_path: worktree_path, card_number: card_number, project_key: ctx.project_key
-    )
-  end
+  ensure_ephemeral_env_for_comment(ctx, card_number, worktree_path)
 
   dispatch_new_mention(ctx, card_key: card_key, card_number: card_number,
                             card_title: card_title, branch: branch, worktree_path: worktree_path)

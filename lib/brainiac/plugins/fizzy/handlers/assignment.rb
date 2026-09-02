@@ -58,16 +58,9 @@ def handle_card_assigned(payload, board_key: nil)
     inline_effort: initial_effort
   )
 
-  # Create ephemeral Belt environment if card has deploy tag and it's a Belt app
-  has_deploy_tag = tags.any? do |tag|
-    name = (tag.is_a?(Hash) ? tag["name"] : tag).to_s.downcase
-    name == "deploy"
-  end
-  if has_deploy_tag
-    maybe_create_ephemeral_belt_env(
-      worktree_path: worktree_path, card_number: card_number, project_key: project_key
-    )
-  end
+  maybe_create_ephemeral_belt_env(
+    worktree_path: worktree_path, card_number: card_number, project_key: project_key, tags: tags
+  )
 
   dispatch_assigned_card(
     card_number: card_number, card_internal_id: card_internal_id, title: title, tags: tags,
@@ -195,71 +188,135 @@ def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branc
   [200, { status: "processed", card: card_number, branch: branch, project: project_key, agent: agent_name }.to_json]
 end
 
-# Create an ephemeral Belt environment for a card if:
-# 1. The project has a parent environment configured
-# 2. The worktree is a Belt application
-# 3. Ephemeral deploys are enabled in basecamp.json
+# Ensure an ephemeral Belt environment is configured in the worktree when the
+# card has a `deploy` tag. Fizzy has no tag-added webhook, so comment handlers
+# pass fetch_live_tags: true to read current tags from `fizzy card show`.
 #
-# This runs in the background to not block agent dispatch.
-def maybe_create_ephemeral_belt_env(worktree_path:, card_number:, project_key:)
+# `belt g environment` is synchronous so the worktree is configured before the
+# agent starts. The actual `belt deploy` runs in the background.
+def maybe_create_ephemeral_belt_env(worktree_path:, card_number:, project_key:, tags: nil,
+                                    repo_path: nil, agent_name: nil, fetch_live_tags: false)
+  unless defined?(BeltConfig) && defined?(BeltEnvironment)
+    LOG.debug "[EphemeralEnv] Belt utilities not available — skipping"
+    return
+  end
+
+  unless worktree_path && File.directory?(worktree_path)
+    LOG.debug "[EphemeralEnv] Worktree missing at #{worktree_path.inspect} — skipping"
+    return
+  end
+
+  unless belt_app_for_ephemeral?(worktree_path)
+    LOG.debug "[EphemeralEnv] #{project_key} is not a Belt app — skipping"
+    return
+  end
+
+  unless BeltConfig.ephemeral_deploys_enabled?
+    LOG.info "[EphemeralEnv] Ephemeral deploys disabled in basecamp.json"
+    return
+  end
+
+  resolved_tags = resolve_ephemeral_env_tags(
+    tags, card_number: card_number, repo_path: repo_path || worktree_path,
+          agent_name: agent_name, fetch_live_tags: fetch_live_tags
+  )
+  tag_list = tag_names(resolved_tags)
+  unless tag_list.include?("deploy")
+    LOG.debug "[EphemeralEnv] Card ##{card_number} tags=#{tag_list.inspect} — no deploy tag, skipping"
+    return
+  end
+
+  parent_env = BeltConfig.parent_env_for(project_key)
+  unless parent_env
+    LOG.info "[EphemeralEnv] Card ##{card_number} has deploy tag but no parent env configured for #{project_key}"
+    return
+  end
+
+  env_name = BeltConfig.ephemeral_env_for_card(card_number)
+  env_dir = File.join(worktree_path, "infrastructure", env_name.to_s)
+
+  if File.directory?(env_dir)
+    LOG.info "[EphemeralEnv] Card ##{card_number} has deploy tag; #{env_name} already configured at #{env_dir}"
+    track_ephemeral_env_if_needed(env_name, card_number, project_key, parent_env, worktree_path)
+    return
+  end
+
+  parent_dir = File.join(worktree_path, "infrastructure", parent_env.to_s)
+  unless File.directory?(parent_dir)
+    LOG.error "[EphemeralEnv] Parent env '#{parent_env}' not found at #{parent_dir}"
+    return
+  end
+
+  LOG.info "[EphemeralEnv] Card ##{card_number} has deploy tag; #{env_name} not in worktree — creating from '#{parent_env}'"
+  create_and_deploy_ephemeral_env(
+    worktree_path: worktree_path, env_name: env_name, parent_env: parent_env,
+    card_number: card_number, project_key: project_key
+  )
+rescue StandardError => e
+  LOG.error "[EphemeralEnv] Error creating ephemeral env: #{e.message}"
+end
+
+def ensure_ephemeral_env_for_comment(ctx, card_number, worktree)
+  return unless card_number && worktree && File.directory?(worktree)
+
+  maybe_create_ephemeral_belt_env(
+    worktree_path: worktree, card_number: card_number, project_key: ctx.project_key,
+    tags: ctx.card_tags, repo_path: ctx.project_config["repo_path"],
+    agent_name: ctx.agent_name, fetch_live_tags: true
+  )
+end
+
+def belt_app_for_ephemeral?(worktree_path)
+  return BeltEnvironment.belt_app?(worktree_path) if defined?(BeltEnvironment) && BeltEnvironment.respond_to?(:belt_app?)
+
+  %w[config/routes.rb config/routes.tf.rb infrastructure/routes.tf.rb].any? do |rel|
+    File.exist?(File.join(worktree_path, rel))
+  end
+end
+
+def resolve_ephemeral_env_tags(tags, card_number:, repo_path:, agent_name:, fetch_live_tags:)
+  return tags unless fetch_live_tags && card_number
+
+  live = fetch_card_tags(card_number, repo_path: repo_path, env: fizzy_env_for(agent_name || AI_AGENT_NAME))
+  if live
+    LOG.info "[EphemeralEnv] Card ##{card_number} live tags: #{tag_names(live).inspect}"
+    live
+  else
+    LOG.warn "[EphemeralEnv] Could not fetch live tags for card ##{card_number} — falling back to webhook tags #{tag_names(tags).inspect}"
+    tags
+  end
+end
+
+def track_ephemeral_env_if_needed(env_name, card_number, project_key, parent_env, worktree_path)
+  return if BeltConfig.ephemeral_env?(env_name)
+
+  BeltConfig.track_ephemeral_env(env_name,
+                                 "card_number" => card_number,
+                                 "project" => project_key,
+                                 "parent_env" => parent_env,
+                                 "worktree" => worktree_path)
+end
+
+def create_and_deploy_ephemeral_env(worktree_path:, env_name:, parent_env:, card_number:, project_key:)
+  success = BeltEnvironment.create_environment(
+    worktree: worktree_path, env_name: env_name, parent_env: parent_env
+  )
+  unless success
+    LOG.error "[EphemeralEnv] Failed to create environment '#{env_name}'"
+    return
+  end
+
+  BeltConfig.track_ephemeral_env(env_name,
+                                 "card_number" => card_number,
+                                 "project" => project_key,
+                                 "parent_env" => parent_env,
+                                 "worktree" => worktree_path)
+  LOG.info "[EphemeralEnv] Configured #{env_name} in worktree, deploying in background"
+
   Thread.new do
-    # Check if Belt utilities are available (loaded from brainiac core)
-    unless defined?(BeltHelpers) && defined?(BeltConfig) && defined?(BeltEnvironment)
-      LOG.debug "[EphemeralEnv] Belt utilities not available — skipping ephemeral env creation"
-      next
-    end
-
-    # Check if this is a Belt app
-    unless belt_app?(worktree_path)
-      LOG.debug "[EphemeralEnv] #{project_key} is not a Belt app — skipping ephemeral env"
-      next
-    end
-
-    # Check if ephemeral deploys are enabled
-    unless BeltConfig.ephemeral_deploys_enabled?
-      LOG.info "[EphemeralEnv] Ephemeral deploys disabled in basecamp.json"
-      next
-    end
-
-    # Get the parent environment for this project
-    parent_env = BeltConfig.parent_env_for(project_key)
-    unless parent_env
-      LOG.info "[EphemeralEnv] No parent env configured for #{project_key} in basecamp.json deploy.project_envs"
-      next
-    end
-
-    env_name = BeltConfig.ephemeral_env_for_card(card_number)
-
-    # Check if environment already exists (re-assignment scenario)
-    if BeltConfig.ephemeral_env?(env_name)
-      LOG.info "[EphemeralEnv] Environment #{env_name} already exists — skipping creation"
-      next
-    end
-
-    LOG.info "[EphemeralEnv] Creating ephemeral environment '#{env_name}' from '#{parent_env}' for card ##{card_number}"
-
-    # Create the environment
-    success = BeltEnvironment.create_environment(
-      worktree: worktree_path,
-      env_name: env_name,
-      parent_env: parent_env
-    )
-
-    if success
-      BeltConfig.track_ephemeral_env(env_name,
-                                     "card_number" => card_number,
-                                     "project" => project_key,
-                                     "parent_env" => parent_env,
-                                     "worktree" => worktree_path)
-      LOG.info "[EphemeralEnv] Successfully created and tracked environment '#{env_name}'"
-
-      # Deploy to the ephemeral environment
-      frontend_only = BeltEnvironment.frontend_only_changes?(worktree: worktree_path)
-      BeltEnvironment.deploy(worktree: worktree_path, env_name: env_name, frontend_only: frontend_only)
-    else
-      LOG.error "[EphemeralEnv] Failed to create environment '#{env_name}'"
-    end
+    frontend_only = BeltEnvironment.frontend_only_changes?(worktree: worktree_path)
+    BeltEnvironment.deploy(worktree: worktree_path, env_name: env_name, frontend_only: frontend_only)
   rescue StandardError => e
-    LOG.error "[EphemeralEnv] Error creating ephemeral env: #{e.message}"
+    LOG.error "[EphemeralEnv] Error deploying '#{env_name}': #{e.message}"
   end
 end

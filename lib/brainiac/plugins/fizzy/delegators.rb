@@ -25,6 +25,18 @@ def prefetch_card_context(card_number, repo_path:, agent_name: nil)
   Brainiac::Plugins::Fizzy::Helpers.prefetch_card_context(card_number, repo_path: repo_path, agent_name: agent_name)
 end
 
+def tag_names(tags)
+  Brainiac::Plugins::Fizzy::Helpers.tag_names(tags)
+end
+
+def card_has_tag?(tags, name)
+  Brainiac::Plugins::Fizzy::Helpers.card_has_tag?(tags, name)
+end
+
+def fetch_card_tags(card_number, repo_path:, env: nil)
+  Brainiac::Plugins::Fizzy::Helpers.fetch_card_tags(card_number, repo_path: repo_path, env: env)
+end
+
 def resolve_github_agent_env(agent_name, github_repo)
   Brainiac::Plugins::Fizzy::Helpers.resolve_github_agent_env(agent_name, github_repo)
 end
