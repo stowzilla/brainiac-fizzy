@@ -173,14 +173,10 @@ module Brainiac
 
             # Append footer if applicable
             body = last_agent_comment.dig("body", "html") || ""
-            unless body.include?("<em>Branch:")
+            unless footer_already_present?(body)
               branch = detect_branch_from_comment(body, card_number)
               if branch
-                pr_url = detect_pr_url(branch, project_config)
-                footer = "<p><em>Branch: <code>#{branch}</code>"
-                footer += " | <a href=\"#{pr_url}\">PR</a>" if pr_url
-                footer += "</em></p>"
-
+                footer = build_comment_footer(branch, card_number, project_config)
                 updated_body = body + footer
                 run_cmd("fizzy", "comment", "update", last_agent_comment["id"], "--card", card_number.to_s,
                         "--body", updated_body, chdir: repo_path, env: env)
@@ -331,7 +327,50 @@ module Brainiac
             repo = project_config["github_repo"]
             return nil unless repo
 
+            # Prefer the existing open PR for this branch. `pull/new/<branch>` only
+            # opens the "create PR" page, which is wrong once a PR already exists.
+            existing = existing_pr_url(branch, repo, project_config["repo_path"])
+            return existing if existing
+
             "https://github.com/#{repo}/pull/new/#{branch}"
+          end
+
+          # Look up the URL of an already-open PR for `branch` via the gh CLI.
+          # Returns nil if gh fails or no PR exists (caller falls back to new-PR link).
+          def existing_pr_url(branch, repo, repo_path)
+            output = run_cmd("gh", "pr", "view", branch, "--repo", repo, "--json", "url",
+                             "--jq", ".url", chdir: repo_path)
+            url = output.to_s.strip
+            url.empty? ? nil : url
+          rescue StandardError
+            nil
+          end
+
+          # True if the comment body already carries a "Branch:" footer/label, in
+          # either the footer format (`<em>Branch:`) or the agent-authored format
+          # (`<strong>Branch:</strong>`). Prevents appending a duplicate footer.
+          def footer_already_present?(body)
+            body.include?("<em>Branch:") ||
+              body.match?(%r{<strong>\s*Branch:\s*</strong>}i) ||
+              body.match?(/(^|>)\s*Branch:\s*</)
+          end
+
+          # Build the "<em>Branch: <code>...</code> | PR | Env</em>" footer.
+          # Includes the ephemeral env link when the card has an active env.
+          def build_comment_footer(branch, card_number, project_config)
+            pr_url = detect_pr_url(branch, project_config)
+            env_url = detect_env_url(card_number)
+
+            footer = "<p><em>Branch: <code>#{branch}</code>"
+            footer += " | <a href=\"#{pr_url}\">PR</a>" if pr_url
+            footer += " | <a href=\"#{env_url}\">Env</a>" if env_url
+            footer += "</em></p>"
+            footer
+          end
+
+          # URL of the ephemeral Belt environment for this card, if one is active.
+          def detect_env_url(card_number)
+            EnvUrl.for_card(card_number)
           end
         end
       end
