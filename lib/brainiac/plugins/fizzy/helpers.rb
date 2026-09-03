@@ -60,6 +60,37 @@ module Brainiac
             context
           end
 
+          # Normalize Fizzy tags from webhook hashes ({ "name" => "deploy" })
+          # or API strings ("deploy") into a lowercase name list.
+          def tag_names(tags)
+            Array(tags).filter_map do |tag|
+              name = tag.is_a?(Hash) ? (tag["name"] || tag[:name]) : tag
+              normalized = name.to_s.downcase
+              normalized unless normalized.empty?
+            end
+          end
+
+          def card_has_tag?(tags, name)
+            tag_names(tags).include?(name.to_s.downcase)
+          end
+
+          # Live tags from `fizzy card show`. Returns nil on failure so callers
+          # can fall back to webhook payload tags. Fizzy has no tag-added webhook;
+          # comment payloads may omit or stale-cache tags, so this is the source of truth.
+          def fetch_card_tags(card_number, repo_path:, env: nil)
+            return nil unless card_number && repo_path
+
+            env ||= default_fizzy_env
+            output = run_cmd("fizzy", "card", "show", card_number.to_s, chdir: repo_path, env: env)
+            card = JSON.parse(output)["data"]
+            return nil unless card
+
+            Array(card["tags"])
+          rescue StandardError => e
+            LOG.warn "[Fizzy] Could not fetch tags for card ##{card_number}: #{e.message}" if defined?(LOG)
+            nil
+          end
+
           def fetch_card_details(card_number, repo_path:, env:)
             output = run_cmd("fizzy", "card", "show", card_number.to_s, chdir: repo_path, env: env)
             card = JSON.parse(output)["data"]
@@ -164,7 +195,7 @@ module Brainiac
             return body unless branch
 
             pr_url = detect_pr_url(branch, project_config)
-            deployment = respond_to?(:deployment_url_for_card, true) ? deployment_url_for_card(card_number) : nil
+            deployment = detect_deployment(card_number)
 
             footer_lines = []
             footer_lines << "<strong>Branch:</strong> <code>#{branch}</code>" unless body.include?(branch)
@@ -179,6 +210,19 @@ module Brainiac
             return body if footer_lines.empty?
 
             "#{body}<p><em>#{footer_lines.join(" &middot; ")}</em></p>"
+          end
+
+          # Resolve the live deployment for a card as { env:, url: }, or nil.
+          # Prefers the tracked deployment-environment state (dev01/dev02); falls
+          # back to the ephemeral Belt environment URL when no tracked env matches.
+          def detect_deployment(card_number)
+            tracked = respond_to?(:deployment_url_for_card, true) ? deployment_url_for_card(card_number) : nil
+            return tracked if tracked
+
+            env_url = detect_env_url(card_number)
+            return nil unless env_url
+
+            { env: "ephemeral", url: env_url }
           end
 
           def ensure_fizzy_yaml!(chdir, project_config)
@@ -319,7 +363,50 @@ module Brainiac
             repo = project_config["github_repo"]
             return nil unless repo
 
+            # Prefer the existing open PR for this branch. `pull/new/<branch>` only
+            # opens the "create PR" page, which is wrong once a PR already exists.
+            existing = existing_pr_url(branch, repo, project_config["repo_path"])
+            return existing if existing
+
             "https://github.com/#{repo}/pull/new/#{branch}"
+          end
+
+          # Look up the URL of an already-open PR for `branch` via the gh CLI.
+          # Returns nil if gh fails or no PR exists (caller falls back to new-PR link).
+          def existing_pr_url(branch, repo, repo_path)
+            output = run_cmd("gh", "pr", "view", branch, "--repo", repo, "--json", "url",
+                             "--jq", ".url", chdir: repo_path)
+            url = output.to_s.strip
+            url.empty? ? nil : url
+          rescue StandardError
+            nil
+          end
+
+          # True if the comment body already carries a "Branch:" footer/label, in
+          # either the footer format (`<em>Branch:`) or the agent-authored format
+          # (`<strong>Branch:</strong>`). Prevents appending a duplicate footer.
+          def footer_already_present?(body)
+            body.include?("<em>Branch:") ||
+              body.match?(%r{<strong>\s*Branch:\s*</strong>}i) ||
+              body.match?(/(^|>)\s*Branch:\s*</)
+          end
+
+          # Build the "<em>Branch: <code>...</code> | PR | Env</em>" footer.
+          # Includes the ephemeral env link when the card has an active env.
+          def build_comment_footer(branch, card_number, project_config)
+            pr_url = detect_pr_url(branch, project_config)
+            env_url = detect_env_url(card_number)
+
+            footer = "<p><em>Branch: <code>#{branch}</code>"
+            footer += " | <a href=\"#{pr_url}\">PR</a>" if pr_url
+            footer += " | <a href=\"#{env_url}\">Env</a>" if env_url
+            footer += "</em></p>"
+            footer
+          end
+
+          # URL of the ephemeral Belt environment for this card, if one is active.
+          def detect_env_url(card_number)
+            EnvUrl.for_card(card_number)
           end
         end
       end
