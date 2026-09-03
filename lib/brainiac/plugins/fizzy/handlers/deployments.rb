@@ -274,3 +274,27 @@ def resolve_deployment_url(env_config, card_tags)
   end
   env_config["url"]
 end
+
+# Resolve the live ephemeral deployment URL for a given card number.
+# Returns { env:, url: } for the environment currently occupied by this card,
+# or nil if the card isn't deployed anywhere (or deployments aren't configured).
+def deployment_url_for_card(card_number)
+  return nil unless defined?(DEPLOYMENTS_CONFIG)
+  return nil unless card_number
+
+  config = DEPLOYMENTS_CONFIG["environments"] || {}
+  state = load_deployment_state
+
+  env_key, info = state.find do |key, v|
+    v.is_a?(Hash) && v["card_number"].to_s == card_number.to_s && v["status"] == "occupied" && config.key?(key)
+  end
+  return nil unless env_key
+
+  url = resolve_deployment_url(config[env_key], info["card_tags"])
+  return nil unless url
+
+  { env: env_key, url: url }
+rescue StandardError => e
+  LOG.warn "[Fizzy:Deploy] Could not resolve deployment URL for card ##{card_number}: #{e.message}" if defined?(LOG)
+  nil
+end

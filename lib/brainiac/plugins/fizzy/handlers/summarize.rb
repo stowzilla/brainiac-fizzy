@@ -72,9 +72,14 @@ module Brainiac
             env = Helpers.fizzy_env_for(agent_name)
 
             pr_url = Helpers.send(:detect_pr_url, branch, project_config)
+            deployment = respond_to?(:deployment_url_for_card, true) ? deployment_url_for_card(card_number) : nil
             body = "<p>✅ Work completed on this card.</p>"
-            body += "<p><a href=\"#{pr_url}\">View PR</a></p>" if pr_url
             body += "<p><strong>Branch:</strong> <code>#{branch}</code></p>"
+            body += "<p><strong>PR:</strong> <a href=\"#{pr_url}\">#{pr_url}</a></p>" if pr_url
+            if deployment
+              body += "<p><strong>Deployment (#{deployment[:env]}):</strong> " \
+                      "<a href=\"#{deployment[:url]}\">#{deployment[:url]}</a></p>"
+            end
 
             run_cmd("fizzy", "comment", "create", "--card", card_number.to_s, "--body", body,
                     chdir: repo_path, env: env)

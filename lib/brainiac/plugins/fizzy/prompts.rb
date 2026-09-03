@@ -62,10 +62,19 @@ module Brainiac
           {{PR_TARGET_INSTRUCTION}}
 
           **Response destination: Post your response as a comment on Fizzy card #{{CARD_NUMBER}}.**
-          Your comment MUST include a concise summary of what you did, a PR link, and the branch name.
+          Your comment MUST include a concise summary of what you did.
 
-          **MANDATORY: Always include the branch name in your comment.** Use this format:
-          `<p><strong>Branch:</strong> <code>{{BRANCH}}</code></p>`
+          **MANDATORY: Always end your comment with a References block containing all three of the following:**
+          - The branch name
+          - A link to the PR
+          - A link to the live deployed ephemeral environment (if this card was deployed — check the card's [deploy] tag / deployment; if not deployed, state "Not deployed")
+
+          Use this exact HTML format:
+          ```
+          <p><strong>Branch:</strong> <code>{{BRANCH}}</code></p>
+          <p><strong>PR:</strong> <a href="PR_URL_HERE">PR_URL_HERE</a></p>
+          <p><strong>Deployment:</strong> <a href="DEPLOY_URL_HERE">DEPLOY_URL_HERE</a></p>
+          ```
         PROMPT
 
         FOLLOWUP_WORKTREE = <<~'PROMPT'
@@ -123,11 +132,19 @@ module Brainiac
           Read your memory file for this card and write a brief summary comment.
 
           **Response destination: Post your response as a comment on Fizzy card #{{CARD_NUMBER}}.**
-          Include what you did, any PR link, and the branch name.
-          Keep it concise — this is a summary, not a full report.
+          Include what you did. Keep it concise — this is a summary, not a full report.
 
-          **MANDATORY: Always include the branch name in your comment.** Use this format:
-          `<p><strong>Branch:</strong> <code>{{BRANCH}}</code></p>`
+          **MANDATORY: Always end your comment with all three of the following:**
+          - The branch name
+          - A link to the PR
+          - A link to the live deployed ephemeral environment (or "Not deployed" if the card wasn't deployed)
+
+          Use this exact HTML format:
+          ```
+          <p><strong>Branch:</strong> <code>{{BRANCH}}</code></p>
+          <p><strong>PR:</strong> <a href="PR_URL_HERE">PR_URL_HERE</a></p>
+          <p><strong>Deployment:</strong> <a href="DEPLOY_URL_HERE">DEPLOY_URL_HERE</a></p>
+          ```
         PROMPT
 
         UAT_TESTING = <<~'PROMPT'

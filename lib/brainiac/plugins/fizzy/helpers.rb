@@ -140,26 +140,45 @@ module Brainiac
             last_agent_comment = agent_comments.last
             return false unless last_agent_comment
 
-            # Append footer if applicable
+            # Backup: ensure the comment surfaces branch, PR link, and live deployment link.
+            # Whatever the agent already included is left alone; we only append what's missing.
             body = last_agent_comment.dig("body", "html") || ""
-            unless body.include?("<em>Branch:")
-              branch = detect_branch_from_comment(body, card_number)
-              if branch
-                pr_url = detect_pr_url(branch, project_config)
-                footer = "<p><em>Branch: <code>#{branch}</code>"
-                footer += " | <a href=\"#{pr_url}\">PR</a>" if pr_url
-                footer += "</em></p>"
-
-                updated_body = body + footer
-                run_cmd("fizzy", "comment", "update", last_agent_comment["id"], "--card", card_number.to_s,
-                        "--body", updated_body, chdir: repo_path, env: env)
-              end
+            updated_body = ensure_reference_footer(body, card_number, project_config)
+            if updated_body != body
+              run_cmd("fizzy", "comment", "update", last_agent_comment["id"], "--card", card_number.to_s,
+                      "--body", updated_body, chdir: repo_path, env: env)
             end
 
             true
           rescue StandardError => e
             LOG.warn "[Fizzy] Could not append footer to card ##{card_number}: #{e.message}" if defined?(LOG)
             false
+          end
+
+          # Build the reference footer (Branch / PR / Deployment) and append any pieces
+          # that the agent's comment body doesn't already contain. Returns the (possibly
+          # unchanged) body. Detection is deliberately lenient — if the branch name, PR
+          # URL, or deployment URL already appears anywhere in the body, it's not re-added.
+          def ensure_reference_footer(body, card_number, project_config)
+            branch = detect_branch_from_comment(body, card_number)
+            return body unless branch
+
+            pr_url = detect_pr_url(branch, project_config)
+            deployment = respond_to?(:deployment_url_for_card, true) ? deployment_url_for_card(card_number) : nil
+
+            footer_lines = []
+            footer_lines << "<strong>Branch:</strong> <code>#{branch}</code>" unless body.include?(branch)
+            if pr_url && !body.include?(pr_url) && !body.include?("github.com/#{project_config["github_repo"]}/pull")
+              footer_lines << "<strong>PR:</strong> <a href=\"#{pr_url}\">#{pr_url}</a>"
+            end
+            if deployment && !body.include?(deployment[:url])
+              footer_lines << "<strong>Deployment (#{deployment[:env]}):</strong> " \
+                              "<a href=\"#{deployment[:url]}\">#{deployment[:url]}</a>"
+            end
+
+            return body if footer_lines.empty?
+
+            "#{body}<p><em>#{footer_lines.join(" &middot; ")}</em></p>"
           end
 
           def ensure_fizzy_yaml!(chdir, project_config)
