@@ -117,6 +117,7 @@ end
 
 def slugify(text, **) = text.downcase.gsub(/[^a-z0-9]+/, "-")[0..30]
 def record_self_move(_num) = nil
+def file_changed?(_path, force: false) = true
 
 # Write fizzy.json for tests
 fizzy_config = {

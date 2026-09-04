@@ -274,3 +274,112 @@ def resolve_deployment_url(env_config, card_tags)
   end
   env_config["url"]
 end
+
+# Resolve the live ephemeral deployment URL for a given card number.
+# Returns { env:, url: } for the environment currently occupied by this card,
+# or nil if the card isn't deployed anywhere (or deployments aren't configured).
+#
+# Resolution order (live state is the source of truth):
+#   1. A tracked dev environment (dev01/dev02...) occupied by this card, from
+#      deployment_state.json.
+#   2. The card's ephemeral Belt environment (fizzy-<card>), from
+#      ephemeral_envs.json, with the public URL derived from its terraform.tfvars.
+def deployment_url_for_card(card_number)
+  return nil unless card_number
+
+  tracked_deployment_for_card(card_number) || ephemeral_deployment_for_card(card_number)
+rescue StandardError => e
+  LOG.warn "[Fizzy:Deploy] Could not resolve deployment URL for card ##{card_number}: #{e.message}" if defined?(LOG)
+  nil
+end
+
+# A tracked dev environment (dev01/dev02...) currently occupied by this card.
+def tracked_deployment_for_card(card_number)
+  return nil unless defined?(DEPLOYMENTS_CONFIG)
+
+  config = DEPLOYMENTS_CONFIG["environments"] || {}
+  state = load_deployment_state
+
+  env_key, info = state.find do |key, v|
+    v.is_a?(Hash) && v["card_number"].to_s == card_number.to_s && v["status"] == "occupied" && config.key?(key)
+  end
+  return nil unless env_key
+
+  url = resolve_deployment_url(config[env_key], info["card_tags"])
+  return nil unless url
+
+  { env: env_key, url: url }
+end
+
+EPHEMERAL_ENVS_FILE = File.join(BRAINIAC_DIR, "ephemeral_envs.json")
+
+# The active ephemeral Belt environment (fizzy-<card>) for this card, if any.
+# The public URL is derived from the env's terraform.tfvars in its worktree,
+# following the Belt frontend_urls convention.
+def ephemeral_deployment_for_card(card_number)
+  info = active_ephemeral_env_info(card_number)
+  return nil unless info
+
+  worktree = info["worktree"]
+  env_name = "fizzy-#{card_number}"
+  return nil unless worktree
+
+  tfvars = File.join(worktree, "infrastructure", env_name, "terraform.tfvars")
+  return nil unless File.exist?(tfvars)
+
+  url = ephemeral_url_from_tfvars(tfvars)
+  return nil unless url
+
+  { env: env_name, url: url }
+end
+
+# Look up the active ephemeral env metadata for a card from ephemeral_envs.json.
+def active_ephemeral_env_info(card_number)
+  return nil unless File.exist?(EPHEMERAL_ENVS_FILE)
+
+  state = JSON.parse(File.read(EPHEMERAL_ENVS_FILE))
+  info = state["fizzy-#{card_number}"]
+  return nil unless info.is_a?(Hash) && info["status"] == "active"
+
+  info
+rescue JSON::ParserError
+  nil
+end
+
+# Derive the public URL from a Belt env's terraform.tfvars, matching the
+# frontend_urls convention in the Belt infra module:
+#   parent set -> https://<env>.<parent>.<domain>
+#   prod       -> https://<domain>
+#   otherwise  -> https://<env>.<domain>
+def ephemeral_url_from_tfvars(tfvars_path)
+  vars = parse_tfvars(File.read(tfvars_path))
+  domain = vars["domain"].to_s
+  return nil if domain.empty?
+
+  environment = vars["environment"].to_s
+  parent = vars["parent_environment"].to_s
+
+  host =
+    if !parent.empty?
+      "#{environment}.#{parent}.#{domain}"
+    elsif environment == "prod"
+      domain
+    else
+      "#{environment}.#{domain}"
+    end
+
+  "https://#{host}"
+end
+
+# Minimal HCL parser for `key = "value"` lines in terraform.tfvars.
+def parse_tfvars(contents)
+  vars = {}
+  contents.each_line do |line|
+    stripped = line.strip
+    next if stripped.empty? || stripped.start_with?("#")
+
+    match = stripped.match(/\A(\w+)\s*=\s*"([^"]*)"/)
+    vars[match[1]] = match[2] if match
+  end
+  vars
+end
