@@ -3,7 +3,6 @@
 require_relative "fizzy/version"
 require_relative "fizzy/metadata"
 require_relative "fizzy/config"
-require_relative "fizzy/env_url"
 require_relative "fizzy/helpers"
 require_relative "fizzy/prompts"
 require_relative "fizzy/planning"

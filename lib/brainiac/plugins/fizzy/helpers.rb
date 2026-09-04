@@ -213,16 +213,13 @@ module Brainiac
           end
 
           # Resolve the live deployment for a card as { env:, url: }, or nil.
-          # Prefers the tracked deployment-environment state (dev01/dev02); falls
-          # back to the ephemeral Belt environment URL when no tracked env matches.
+          # Reads live deployment state (tracked dev envs from deployment_state.json,
+          # and the card's ephemeral Belt env from ephemeral_envs.json) — the actual
+          # source of truth for which environment a card currently occupies.
           def detect_deployment(card_number)
-            tracked = respond_to?(:deployment_url_for_card, true) ? deployment_url_for_card(card_number) : nil
-            return tracked if tracked
+            return nil unless respond_to?(:deployment_url_for_card, true)
 
-            env_url = detect_env_url(card_number)
-            return nil unless env_url
-
-            { env: "ephemeral", url: env_url }
+            deployment_url_for_card(card_number)
           end
 
           def ensure_fizzy_yaml!(chdir, project_config)
@@ -380,33 +377,6 @@ module Brainiac
             url.empty? ? nil : url
           rescue StandardError
             nil
-          end
-
-          # True if the comment body already carries a "Branch:" footer/label, in
-          # either the footer format (`<em>Branch:`) or the agent-authored format
-          # (`<strong>Branch:</strong>`). Prevents appending a duplicate footer.
-          def footer_already_present?(body)
-            body.include?("<em>Branch:") ||
-              body.match?(%r{<strong>\s*Branch:\s*</strong>}i) ||
-              body.match?(/(^|>)\s*Branch:\s*</)
-          end
-
-          # Build the "<em>Branch: <code>...</code> | PR | Env</em>" footer.
-          # Includes the ephemeral env link when the card has an active env.
-          def build_comment_footer(branch, card_number, project_config)
-            pr_url = detect_pr_url(branch, project_config)
-            env_url = detect_env_url(card_number)
-
-            footer = "<p><em>Branch: <code>#{branch}</code>"
-            footer += " | <a href=\"#{pr_url}\">PR</a>" if pr_url
-            footer += " | <a href=\"#{env_url}\">Env</a>" if env_url
-            footer += "</em></p>"
-            footer
-          end
-
-          # URL of the ephemeral Belt environment for this card, if one is active.
-          def detect_env_url(card_number)
-            EnvUrl.for_card(card_number)
           end
         end
       end

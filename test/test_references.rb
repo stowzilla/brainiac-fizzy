@@ -80,6 +80,60 @@ class TestReferenceFooter < Minitest::Test
     assert_equal "https://ops.example.com", deployment_url_for_card("42")[:url]
   end
 
+  # --- ephemeral Belt env resolution (ephemeral_envs.json + tfvars) ---
+
+  def write_ephemeral_env(card_number:, worktree:, status: "active")
+    state = { "fizzy-#{card_number}" => { "status" => status, "card_number" => card_number, "worktree" => worktree } }
+    File.write(EPHEMERAL_ENVS_FILE, JSON.generate(state))
+  end
+
+  def write_tfvars(worktree, env_name, contents)
+    dir = File.join(worktree, "infrastructure", env_name)
+    FileUtils.mkdir_p(dir)
+    File.write(File.join(dir, "terraform.tfvars"), contents)
+  end
+
+  def test_deployment_url_for_card_resolves_ephemeral_env_from_tfvars
+    write_deployments(config: { "environments" => {} }, state: {})
+    worktree = Dir.mktmpdir("ephemeral-wt")
+    write_ephemeral_env(card_number: 99, worktree: worktree)
+    write_tfvars(worktree, "fizzy-99", %(environment = "fizzy-99"\nparent_environment = "dev"\ndomain = "example.com"\n))
+
+    result = deployment_url_for_card("99")
+    assert_equal "fizzy-99", result[:env]
+    assert_equal "https://fizzy-99.dev.example.com", result[:url]
+  ensure
+    FileUtils.rm_rf(worktree) if worktree
+    FileUtils.rm_f(EPHEMERAL_ENVS_FILE)
+  end
+
+  def test_deployment_url_for_card_prefers_tracked_env_over_ephemeral
+    write_deployments(
+      config: { "environments" => { "dev01" => { "url" => "https://dev01.example.com" } } },
+      state: { "dev01" => { "status" => "occupied", "card_number" => "99" } }
+    )
+    worktree = Dir.mktmpdir("ephemeral-wt")
+    write_ephemeral_env(card_number: 99, worktree: worktree)
+    write_tfvars(worktree, "fizzy-99", %(environment = "fizzy-99"\ndomain = "example.com"\n))
+
+    assert_equal "dev01", deployment_url_for_card("99")[:env]
+  ensure
+    FileUtils.rm_rf(worktree) if worktree
+    FileUtils.rm_f(EPHEMERAL_ENVS_FILE)
+  end
+
+  def test_deployment_url_for_card_ignores_destroyed_ephemeral_env
+    write_deployments(config: { "environments" => {} }, state: {})
+    worktree = Dir.mktmpdir("ephemeral-wt")
+    write_ephemeral_env(card_number: 99, worktree: worktree, status: "destroyed")
+    write_tfvars(worktree, "fizzy-99", %(environment = "fizzy-99"\ndomain = "example.com"\n))
+
+    assert_nil deployment_url_for_card("99")
+  ensure
+    FileUtils.rm_rf(worktree) if worktree
+    FileUtils.rm_f(EPHEMERAL_ENVS_FILE)
+  end
+
   # --- ensure_reference_footer ---
 
   def footer(body, card_number)
