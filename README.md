@@ -37,6 +37,8 @@ Fizzy configuration lives in `~/.brainiac/fizzy.json` (same as before):
     { "id": "user-id-1", "name": "Andy", "human": true },
     { "id": "agent-id-1", "name": "Galen", "human": false }
   ],
+  "uat_agent": false,
+  "uat_agent_tag": "uat",
   "boards": {
     "development": {
       "board_id": "your-board-id",
@@ -50,6 +52,25 @@ Fizzy configuration lives in `~/.brainiac/fizzy.json` (same as before):
   }
 }
 ```
+
+### UAT agent (`uat_agent`)
+
+When a PR is merged and its card moves to the UAT column, Brainiac can dispatch
+an LLM agent to write manual testing steps as a card comment. This spends tokens
+on every merge, so it's **disabled by default**. Set `"uat_agent": true` at the
+top level of `fizzy.json` to opt back in globally. The card still moves to UAT
+and gets the PR-merged comment either way — only the agent dispatch is gated.
+
+**Per-card opt-in:** Even with `uat_agent` off globally, you can trigger the UAT
+agent for a single card by adding the `uat` tag to it. When the card's PR merges,
+Brainiac fetches the card's live tags and dispatches the UAT agent if the tag is
+present. Customize the tag name with `"uat_agent_tag": "your-tag"`, or set it to
+`false`/`null` to disable per-card overrides entirely. This gives you three
+states:
+
+- `uat_agent: true` — dispatch on every merge
+- `uat_agent: false` (default) + `uat` tag on a card — dispatch for that card only
+- `uat_agent: false` + no tag — never dispatch (pure bookkeeping, zero tokens)
 
 ## What This Plugin Handles
 

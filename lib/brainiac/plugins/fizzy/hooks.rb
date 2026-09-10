@@ -134,36 +134,7 @@ module Brainiac
           # PR merged — post comment on Fizzy card, move to UAT, dispatch UAT agent
           def register_pr_merged
             Brainiac.on(:pr_merged) do |ctx|
-              card_number = ctx[:card_number]
-              next unless card_number
-
-              card_info = ctx[:card_info]
-              card_agent = card_info["agent"]
-              env = Helpers.fizzy_env_for(card_agent)
-              repo_path = ctx[:repo_path]
-              board_key = card_info.dig("sources", "fizzy", "board_key") || Config.board_key_for_project(ctx[:project_config])
-
-              # Post PR link comment
-              pr_url = ctx[:pr_url]
-              pr_title = ctx[:pr_title]
-              branch = ctx[:branch]
-              comment_body = "<p>PR merged into main: <a href=\"#{pr_url}\">#{pr_title}</a></p>" \
-                             "<p>Branch: <code>#{branch}</code></p>"
-              run_cmd("fizzy", "comment", "create", "--card", card_number.to_s, "--body", comment_body,
-                      chdir: repo_path, env: env)
-
-              # Move card to UAT
-              Helpers.move_card_to_column(card_number, "uat",
-                                          project_config: ctx[:project_config],
-                                          agent_name: card_agent,
-                                          board_key: board_key)
-              record_self_move(card_number)
-
-              # Clear deployment tracking
-              clear_deployment_for_card(card_number) if respond_to?(:clear_deployment_for_card)
-
-              # Dispatch UAT agent
-              dispatch_fizzy_uat_agent(ctx)
+              handle_pr_merged(ctx)
             rescue StandardError => e
               LOG.error "[Fizzy] Error in pr_merged hook: #{e.message}" if defined?(LOG)
             end
@@ -291,6 +262,75 @@ module Brainiac
           end
 
           # --- Private helpers ---
+
+          # Body of the :pr_merged hook. Posts the PR link comment, moves the
+          # card to UAT, clears deployment tracking, and dispatches the UAT
+          # agent when enabled. Extracted from the hook block to keep the
+          # registration method within complexity limits.
+          def handle_pr_merged(ctx)
+            card_number = ctx[:card_number]
+            return unless card_number
+
+            card_info = ctx[:card_info]
+            card_agent = card_info["agent"]
+            env = Helpers.fizzy_env_for(card_agent)
+            repo_path = ctx[:repo_path]
+            board_key = card_info.dig("sources", "fizzy", "board_key") || Config.board_key_for_project(ctx[:project_config])
+
+            # Post PR link comment
+            comment_body = "<p>PR merged into main: <a href=\"#{ctx[:pr_url]}\">#{ctx[:pr_title]}</a></p>" \
+                           "<p>Branch: <code>#{ctx[:branch]}</code></p>"
+            run_cmd("fizzy", "comment", "create", "--card", card_number.to_s, "--body", comment_body,
+                    chdir: repo_path, env: env)
+
+            # Move card to UAT
+            Helpers.move_card_to_column(card_number, "uat",
+                                        project_config: ctx[:project_config],
+                                        agent_name: card_agent,
+                                        board_key: board_key)
+            record_self_move(card_number)
+
+            # Clear deployment tracking
+            clear_deployment_for_card(card_number) if respond_to?(:clear_deployment_for_card)
+
+            # Dispatch UAT agent — off by default to save tokens. Globally
+            # enabled via "uat_agent": true, or per-card via the UAT tag
+            # (default "uat") even when the global flag is off.
+            if uat_agent_dispatch?(card_number, repo_path: repo_path, env: env)
+              dispatch_fizzy_uat_agent(ctx)
+            else
+              log_uat_dispatch_skipped(card_number)
+            end
+          end
+
+          # Log that UAT dispatch was skipped for a card (global flag off, no tag).
+          def log_uat_dispatch_skipped(card_number)
+            return unless defined?(LOG)
+
+            LOG.info "[Fizzy] UAT agent disabled (set \"uat_agent\": true in fizzy.json, or add the " \
+                     "\"#{Config.uat_agent_tag}\" tag to this card) — skipping dispatch for card ##{card_number}"
+          end
+
+          # Decide whether to dispatch the UAT agent for a merged card.
+          # True when globally enabled, OR when the card carries the configured
+          # UAT tag (per-card opt-in). Card tags aren't in the pr_merged ctx, so
+          # we fetch them live — only when the global flag is off, to avoid an
+          # extra API call when it's already enabled.
+          def uat_agent_dispatch?(card_number, repo_path:, env: nil)
+            return true if Config.uat_agent_enabled?
+
+            tag = Config.uat_agent_tag
+            return false unless tag && card_number && repo_path
+
+            tags = Helpers.fetch_card_tags(card_number, repo_path: repo_path, env: env)
+            return false unless tags
+
+            has_tag = Helpers.card_has_tag?(tags, tag)
+            if has_tag && defined?(LOG)
+              LOG.info "[Fizzy] Card ##{card_number} has \"#{tag}\" tag — dispatching UAT agent despite global flag being off"
+            end
+            has_tag
+          end
 
           def dispatch_fizzy_uat_agent(ctx)
             card_number = ctx[:card_number]

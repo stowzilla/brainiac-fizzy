@@ -82,6 +82,26 @@ module Brainiac
             nil
           end
 
+          # Whether to dispatch an LLM agent to write UAT testing steps when a
+          # PR is merged and the card moves to UAT. Disabled by default to save
+          # tokens — set "uat_agent": true in ~/.brainiac/fizzy.json to enable
+          # globally. Individual cards can still opt in via the UAT tag even when
+          # this is false (see #uat_agent_tag).
+          def uat_agent_enabled?
+            @config.fetch("uat_agent", false) == true
+          end
+
+          # The card tag that opts a single card into UAT agent dispatch even
+          # when uat_agent is globally disabled. Defaults to "uat". Set
+          # "uat_agent_tag": "some-tag" in fizzy.json to customize, or false/null
+          # to disable per-card overrides entirely.
+          def uat_agent_tag
+            value = @config.fetch("uat_agent_tag", "uat")
+            return nil if value == false || value.nil? || value.to_s.strip.empty?
+
+            value.to_s
+          end
+
           def authorized?(payload)
             creator_id = payload.dig("creator", "id")
             @authorized_user_ids.include?(creator_id)
