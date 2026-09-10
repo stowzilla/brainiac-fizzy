@@ -162,11 +162,13 @@ module Brainiac
               # Clear deployment tracking
               clear_deployment_for_card(card_number) if respond_to?(:clear_deployment_for_card)
 
-              # Dispatch UAT agent (opt-in — off by default to save tokens)
-              if Config.uat_agent_enabled?
+              # Dispatch UAT agent — off by default to save tokens. Globally
+              # enabled via "uat_agent": true, or per-card via the UAT tag
+              # (default "uat") even when the global flag is off.
+              if uat_agent_dispatch?(card_number, repo_path: repo_path, env: env)
                 dispatch_fizzy_uat_agent(ctx)
               else
-                LOG.info "[Fizzy] UAT agent disabled (set \"uat_agent\": true in fizzy.json to enable) — skipping dispatch for card ##{card_number}" if defined?(LOG)
+                LOG.info "[Fizzy] UAT agent disabled (set \"uat_agent\": true in fizzy.json, or add the \"#{Config.uat_agent_tag}\" tag to this card) — skipping dispatch for card ##{card_number}" if defined?(LOG)
               end
             rescue StandardError => e
               LOG.error "[Fizzy] Error in pr_merged hook: #{e.message}" if defined?(LOG)
@@ -295,6 +297,25 @@ module Brainiac
           end
 
           # --- Private helpers ---
+
+          # Decide whether to dispatch the UAT agent for a merged card.
+          # True when globally enabled, OR when the card carries the configured
+          # UAT tag (per-card opt-in). Card tags aren't in the pr_merged ctx, so
+          # we fetch them live — only when the global flag is off, to avoid an
+          # extra API call when it's already enabled.
+          def uat_agent_dispatch?(card_number, repo_path:, env: nil)
+            return true if Config.uat_agent_enabled?
+
+            tag = Config.uat_agent_tag
+            return false unless tag && card_number && repo_path
+
+            tags = Helpers.fetch_card_tags(card_number, repo_path: repo_path, env: env)
+            return false unless tags
+
+            has_tag = Helpers.card_has_tag?(tags, tag)
+            LOG.info "[Fizzy] Card ##{card_number} has \"#{tag}\" tag — dispatching UAT agent despite global flag being off" if has_tag && defined?(LOG)
+            has_tag
+          end
 
           def dispatch_fizzy_uat_agent(ctx)
             card_number = ctx[:card_number]
