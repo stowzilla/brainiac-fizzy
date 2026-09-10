@@ -162,8 +162,12 @@ module Brainiac
               # Clear deployment tracking
               clear_deployment_for_card(card_number) if respond_to?(:clear_deployment_for_card)
 
-              # Dispatch UAT agent
-              dispatch_fizzy_uat_agent(ctx)
+              # Dispatch UAT agent (opt-in — off by default to save tokens)
+              if Config.uat_agent_enabled?
+                dispatch_fizzy_uat_agent(ctx)
+              else
+                LOG.info "[Fizzy] UAT agent disabled (set \"uat_agent\": true in fizzy.json to enable) — skipping dispatch for card ##{card_number}" if defined?(LOG)
+              end
             rescue StandardError => e
               LOG.error "[Fizzy] Error in pr_merged hook: #{e.message}" if defined?(LOG)
             end

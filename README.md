@@ -37,6 +37,7 @@ Fizzy configuration lives in `~/.brainiac/fizzy.json` (same as before):
     { "id": "user-id-1", "name": "Andy", "human": true },
     { "id": "agent-id-1", "name": "Galen", "human": false }
   ],
+  "uat_agent": false,
   "boards": {
     "development": {
       "board_id": "your-board-id",
@@ -50,6 +51,14 @@ Fizzy configuration lives in `~/.brainiac/fizzy.json` (same as before):
   }
 }
 ```
+
+### UAT agent (`uat_agent`)
+
+When a PR is merged and its card moves to the UAT column, Brainiac can dispatch
+an LLM agent to write manual testing steps as a card comment. This spends tokens
+on every merge, so it's **disabled by default**. Set `"uat_agent": true` at the
+top level of `fizzy.json` to opt back in. The card still moves to UAT and gets
+the PR-merged comment either way — only the agent dispatch is gated.
 
 ## What This Plugin Handles
 

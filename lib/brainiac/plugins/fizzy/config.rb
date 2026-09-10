@@ -82,6 +82,13 @@ module Brainiac
             nil
           end
 
+          # Whether to dispatch an LLM agent to write UAT testing steps when a
+          # PR is merged and the card moves to UAT. Disabled by default to save
+          # tokens — set "uat_agent": true in ~/.brainiac/fizzy.json to enable.
+          def uat_agent_enabled?
+            @config.fetch("uat_agent", false) == true
+          end
+
           def authorized?(payload)
             creator_id = payload.dig("creator", "id")
             @authorized_user_ids.include?(creator_id)
