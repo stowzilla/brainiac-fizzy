@@ -49,6 +49,9 @@ def handle_card_assigned(payload, board_key: nil)
   initial_cli = detect_cli_provider(tags: tags)
   initial_model = detect_model(project_config, tags: tags)
   initial_effort = detect_effort(project_config, tags: tags)
+  # Profile ([profile:X]/[p:X]) can be specified inline in the card title.
+  # It's a named env bundle (e.g. an alternate kiro-cli account) — see core profiles.rb.
+  initial_profile = parse_inline_tags(title.to_s)[:profile]
 
   # Persist initial overrides from card tags to the work item
   resolve_work_item_overrides(
@@ -66,7 +69,7 @@ def handle_card_assigned(payload, board_key: nil)
     card_number: card_number, card_internal_id: card_internal_id, title: title, tags: tags,
     branch: branch, worktree_path: worktree_path, project_config: project_config, project_key: project_key,
     agent_name: assigned_agent, model: initial_model,
-    effort: initial_effort, cli_provider_override: initial_cli, board_key: board_key
+    effort: initial_effort, cli_provider_override: initial_cli, profile: initial_profile, board_key: board_key
   )
 end
 
@@ -136,7 +139,8 @@ def setup_assigned_worktree(repo_path, branch, card_internal_id, card_number, pr
 end
 
 def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branch:, worktree_path:,
-                           project_config:, project_key:, agent_name:, model:, effort:, cli_provider_override:, board_key: nil)
+                           project_config:, project_key:, agent_name:, model:, effort:, cli_provider_override:,
+                           profile: nil, board_key: nil)
   card_context = prefetch_card_context(card_number, repo_path: project_config["repo_path"], agent_name: agent_name)
   planning_info = detect_planning_mode(text: title, tags: tags, card_internal_id: card_internal_id, card_number: card_number)
 
@@ -180,7 +184,7 @@ def dispatch_assigned_card(card_number:, card_internal_id:, title:, tags:, branc
                             log_name: "assigned-#{card_number}", model: model, effort: effort,
                             agent_name: agent_name, card_number: card_number, source: :fizzy,
                             source_context: { card_number: card_number, board_key: board_key, dispatched_at: Time.now },
-                            cli_provider: cli_provider_override, env: agent_github_env)
+                            cli_provider: cli_provider_override, profile: profile, env: agent_github_env)
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: agent_name)
 
   Thread.new { move_card_to_column(card_number, "right_now", project_config: project_config, agent_name: agent_name, board_key: board_key) }
