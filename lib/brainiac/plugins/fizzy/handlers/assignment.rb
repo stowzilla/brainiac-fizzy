@@ -194,8 +194,13 @@ end
 #
 # `belt g environment` is synchronous so the worktree is configured before the
 # agent starts. The actual `belt deploy` runs in the background.
+#
+# When `force: true`, the `deploy` tag requirement is bypassed — the caller is
+# explicitly requesting env setup (e.g. the `brainiac fizzy env setup` CLI or
+# the `/api/fizzy/ephemeral-env/:card` endpoint), so no tag is needed.
 def maybe_create_ephemeral_belt_env(worktree_path:, card_number:, project_key:, tags: nil,
-                                    repo_path: nil, agent_name: nil, fetch_live_tags: false)
+                                    repo_path: nil, agent_name: nil, fetch_live_tags: false,
+                                    force: false)
   unless defined?(BeltConfig) && defined?(BeltEnvironment)
     LOG.debug "[EphemeralEnv] Belt utilities not available — skipping"
     return
@@ -216,14 +221,16 @@ def maybe_create_ephemeral_belt_env(worktree_path:, card_number:, project_key:, 
     return
   end
 
-  resolved_tags = resolve_ephemeral_env_tags(
-    tags, card_number: card_number, repo_path: repo_path || worktree_path,
-          agent_name: agent_name, fetch_live_tags: fetch_live_tags
-  )
-  tag_list = tag_names(resolved_tags)
-  unless tag_list.include?("deploy")
-    LOG.debug "[EphemeralEnv] Card ##{card_number} tags=#{tag_list.inspect} — no deploy tag, skipping"
-    return
+  unless force
+    resolved_tags = resolve_ephemeral_env_tags(
+      tags, card_number: card_number, repo_path: repo_path || worktree_path,
+            agent_name: agent_name, fetch_live_tags: fetch_live_tags
+    )
+    tag_list = tag_names(resolved_tags)
+    unless tag_list.include?("deploy")
+      LOG.debug "[EphemeralEnv] Card ##{card_number} tags=#{tag_list.inspect} — no deploy tag, skipping"
+      return
+    end
   end
 
   parent_env = BeltConfig.parent_env_for(project_key)
@@ -264,6 +271,75 @@ def ensure_ephemeral_env_for_comment(ctx, card_number, worktree)
     tags: ctx.card_tags, repo_path: ctx.project_config["repo_path"],
     agent_name: ctx.agent_name, fetch_live_tags: true
   )
+end
+
+# Manually set up an ephemeral Belt env for a card that was already worked,
+# without dispatching an agent. Resolves the card's existing worktree from the
+# work item map, configures + deploys the env synchronously, and tracks it in
+# ephemeral_envs.json so PR-update auto-redeploys (brainiac-github) work.
+#
+# Bypasses the `deploy` tag requirement (force: true) — the caller is asking
+# for this explicitly. Returns a result hash suitable for a JSON API response.
+#
+# @param card_number [Integer, String] Fizzy card number
+# @return [Hash] { status:, env:, url:, worktree:, reason: }
+def setup_ephemeral_env_for_card(card_number)
+  return { status: "error", reason: "card_number required" } unless card_number
+
+  unless defined?(BeltConfig) && defined?(BeltEnvironment)
+    return { status: "error", reason: "Belt utilities not available" }
+  end
+
+  card_number = card_number.to_s
+  entry = work_item_entry_for_card(card_number)
+  return { status: "error", reason: "no work item found for card ##{card_number}" } unless entry
+
+  worktree = entry["worktree"]
+  project_key = entry["project"]
+  unless worktree && File.directory?(worktree)
+    return { status: "error", reason: "worktree missing for card ##{card_number} (#{worktree.inspect})" }
+  end
+
+  env_name = BeltConfig.ephemeral_env_for_card(card_number)
+  already = BeltEnvironment.environment_configured?(worktree: worktree, env_name: env_name)
+
+  maybe_create_ephemeral_belt_env(
+    worktree_path: worktree, card_number: card_number,
+    project_key: project_key, force: true
+  )
+
+  # After setup, resolve the public URL the same way deployment lookups do.
+  url = defined?(deployment_url_for_card) ? (deployment_url_for_card(card_number) || {})[:url] : nil
+
+  {
+    status: "ok",
+    env: env_name,
+    url: url,
+    worktree: worktree,
+    already_configured: already
+  }
+rescue StandardError => e
+  LOG.error "[EphemeralEnv] Manual setup failed for card ##{card_number}: #{e.message}"
+  { status: "error", reason: e.message }
+end
+
+# Resolve the work item entry for a Fizzy card number from work_items.json.
+# Returns a flattened hash with worktree/branch/project or nil.
+def work_item_entry_for_card(card_number)
+  map = load_work_item_map
+  match = map.values.find do |entry|
+    entry.dig("sources", "fizzy", "card_number").to_s == card_number.to_s
+  end
+  return nil unless match
+
+  {
+    "worktree" => match["worktree"],
+    "branch" => match["branch"],
+    "project" => match["project"]
+  }
+rescue StandardError => e
+  LOG.error "[EphemeralEnv] Could not load work item for card ##{card_number}: #{e.message}" if defined?(LOG)
+  nil
 end
 
 def belt_app_for_ephemeral?(worktree_path)

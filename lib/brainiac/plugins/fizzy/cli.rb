@@ -27,6 +27,8 @@ module Brainiac
               cmd_setup
             when "board"
               cmd_board(args)
+            when "env"
+              cmd_env(args)
             else
               print_help
             end
@@ -123,6 +125,66 @@ module Brainiac
               puts "  assign <project> <board_key>  Assign a project to a board"
               puts "  columns <board_key>           Refresh columns for a board from Fizzy"
               puts "  webhook <board_key> [url]     Create/replace webhook and save the signing secret"
+            end
+          end
+
+          # --- ephemeral env management ---
+
+          # `brainiac fizzy env setup <card_number>`
+          #
+          # Manually set up (or refresh tracking for) an ephemeral Belt env for a
+          # card that was already worked — no agent, no tokens. Once tracked, PR
+          # updates auto-redeploy it via brainiac-github.
+          def cmd_env(args)
+            sub = args.shift
+            case sub
+            when "setup", "add"
+              env_setup(args)
+            else
+              puts "Usage: brainiac fizzy env setup <card_number>"
+              puts ""
+              puts "Commands:"
+              puts "  setup <card_number>   Configure + deploy an ephemeral Belt env for a"
+              puts "                        card that was already worked (no agent dispatch)."
+            end
+          end
+
+          def env_setup(args)
+            card_number = args.shift
+            if card_number.nil? || card_number.strip.empty?
+              puts "Usage: brainiac fizzy env setup <card_number>"
+              return
+            end
+
+            require "net/http"
+            require "uri"
+
+            server_url = detect_server_url
+            uri = URI("#{server_url}/api/fizzy/ephemeral-env/#{card_number}")
+
+            puts "Setting up ephemeral env for card ##{card_number} (no agent)..."
+            begin
+              http = Net::HTTP.new(uri.host, uri.port)
+              http.read_timeout = 600 # belt deploy can be slow
+              response = http.post(uri.path, "")
+              data = begin
+                JSON.parse(response.body)
+              rescue StandardError
+                {}
+              end
+
+              if response.is_a?(Net::HTTPSuccess) && data["status"] == "ok"
+                puts "✓ Ephemeral env '#{data["env"]}' ready#{" (was already configured)" if data["already_configured"]}"
+                puts "  Worktree: #{data["worktree"]}" if data["worktree"]
+                puts "  URL:      #{data["url"]}" if data["url"]
+                puts ""
+                puts "Tracked in ephemeral_envs.json — PR updates will auto-redeploy it."
+              else
+                puts "✗ Failed: #{data["reason"] || response.message}"
+              end
+            rescue StandardError => e
+              puts "Could not reach server at #{server_url}: #{e.message}"
+              puts "Is the server running? Check with: brainiac status"
             end
           end
 
@@ -629,6 +691,7 @@ module Brainiac
                 board list                          List configured boards and their columns
                 board assign <project> <board_key>  Assign a project to a board
                 board columns <board_key>           Refresh columns for a board from Fizzy
+                env setup <card_number>             Set up an ephemeral Belt env for an already-worked card (no agent)
 
               Fizzy handles card assignment, comments, @mentions, cross-agent reviews,
               duplicate detection, and planning mode via webhooks.
@@ -662,11 +725,13 @@ module Brainiac
       # When called with args (the words typed so far after the plugin name),
       # returns context-sensitive completions for nested subcommands.
       def self.completions(args = [])
-        return %w[board config setup status] if args.empty?
+        return %w[board config env setup status] if args.empty?
 
         case args[0]
         when "board"
           board_completions(args[1..])
+        when "env"
+          args.length <= 1 ? %w[setup add] : []
         else
           []
         end
