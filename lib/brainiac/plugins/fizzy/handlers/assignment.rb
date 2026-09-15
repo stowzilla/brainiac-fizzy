@@ -290,9 +290,7 @@ end
 def setup_ephemeral_env_for_card(card_number)
   return { status: "error", reason: "card_number required" } unless card_number
 
-  unless defined?(BeltConfig) && defined?(BeltEnvironment)
-    return { status: "error", reason: "Belt utilities not available" }
-  end
+  return { status: "error", reason: "Belt utilities not available" } unless defined?(BeltConfig) && defined?(BeltEnvironment)
 
   card_number = card_number.to_s
   entry = work_item_entry_for_card(card_number)
@@ -300,9 +298,7 @@ def setup_ephemeral_env_for_card(card_number)
 
   worktree = entry["worktree"]
   project_key = entry["project"]
-  unless worktree && File.directory?(worktree)
-    return { status: "error", reason: "worktree missing for card ##{card_number} (#{worktree.inspect})" }
-  end
+  return { status: "error", reason: "worktree missing for card ##{card_number} (#{worktree.inspect})" } unless worktree && File.directory?(worktree)
 
   env_name = BeltConfig.ephemeral_env_for_card(card_number)
   already = BeltEnvironment.environment_configured?(worktree: worktree, env_name: env_name)
