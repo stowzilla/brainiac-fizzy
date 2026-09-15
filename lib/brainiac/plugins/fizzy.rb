@@ -103,7 +103,8 @@ module Brainiac
           end
 
           # Card index API (duplicate detection)
-          app.get "/api/card-index" do            content_type :json
+          app.get "/api/card-index" do
+            content_type :json
             halt 404, { error: "Card index not available" }.to_json unless defined?(CARD_INDEX)
 
             query = params["q"]

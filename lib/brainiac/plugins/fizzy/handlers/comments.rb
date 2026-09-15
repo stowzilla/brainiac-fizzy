@@ -18,7 +18,7 @@ CommentContext = Struct.new(
   :project_config, :project_key, :card_number, :worktree,
   :model, :effort, :deploy_intent, :cli_provider_override,
   :comment_vars, :card_tags, :worktree_override, :fresh,
-  :board_key,
+  :board_key, :profile,
   keyword_init: true
 )
 
@@ -146,6 +146,7 @@ def build_comment_context(eventable:, plain_text:, tags:, card_internal_id:, car
     card_tags: card_tags,
     worktree_override: resolve_worktree_override(tags, project_config),
     fresh: tags[:fresh],
+    profile: tags[:profile],
     comment_vars: {
       "COMMENT_CREATOR" => creator_name || "Unknown",
       "COMMENT_ID" => comment_id.to_s,
@@ -411,7 +412,7 @@ def dispatch_cross_agent_review(ctx, card_key:, card_number:, card_assigned_agen
                             model: ctx.model, effort: ctx.effort, agent_name: ctx.agent_name,
                             card_number: card_number, comment_id: ctx.comment_id,
                             source: :fizzy, source_context: { card_number: card_number, dispatched_at: Time.now },
-                            cli_provider: ctx.cli_provider_override)
+                            cli_provider: ctx.cli_provider_override, profile: ctx.profile)
   return [200, { status: "dispatch_failed", agent: ctx.agent_name, card: card_number }.to_json] unless pid
 
   register_session(card_key, pid, log_file: log_file, supersede_key: card_key, agent_name: ctx.agent_name)
@@ -525,6 +526,7 @@ def dispatch_new_mention(ctx, card_key:, card_number:, card_title:, branch:, wor
                             model: ctx.model, effort: ctx.effort, agent_name: ctx.agent_name,
                             card_number: card_number, comment_id: ctx.comment_id,
                             source: :fizzy, cli_provider: ctx.cli_provider_override,
+                            profile: ctx.profile,
                             source_context: { card_number: card_number, dispatched_at: Time.now })
   return [200, { status: "dispatch_failed", agent: ctx.agent_name, card: card_number }.to_json] unless pid
 
@@ -563,6 +565,7 @@ def dispatch_followup_comment(ctx, card_key:, card_number:, work_dir:)
                             model: ctx.model, effort: effort, agent_name: ctx.agent_name,
                             card_number: card_number, comment_id: ctx.comment_id,
                             source: :fizzy, cli_provider: ctx.cli_provider_override, resume: should_resume,
+                            profile: ctx.profile,
                             source_context: {
                               card_number: card_number, card_internal_id: ctx.card_internal_id,
                               deploy_intent: ctx.deploy_intent, board_key: ctx.board_key, dispatched_at: Time.now
