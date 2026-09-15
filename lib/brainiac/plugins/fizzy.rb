@@ -103,8 +103,7 @@ module Brainiac
           end
 
           # Card index API (duplicate detection)
-          app.get "/api/card-index" do
-            content_type :json
+          app.get "/api/card-index" do            content_type :json
             halt 404, { error: "Card index not available" }.to_json unless defined?(CARD_INDEX)
 
             query = params["q"]
@@ -113,6 +112,21 @@ module Brainiac
               { query: query, matches: similar, total_indexed: CARD_INDEX.size }.to_json
             else
               { total: CARD_INDEX.size, cards: CARD_INDEX }.to_json
+            end
+          end
+
+          # Manually set up an ephemeral Belt env for a card that was already
+          # worked — no agent dispatch, no tokens. Configures + deploys the env
+          # in the card's existing worktree and tracks it so PR-update
+          # auto-redeploys keep it fresh.
+          app.post "/api/fizzy/ephemeral-env/:card" do
+            content_type :json
+            card_number = params["card"]
+            result = setup_ephemeral_env_for_card(card_number)
+            if result[:status] == "ok"
+              result.to_json
+            else
+              halt 422, result.to_json
             end
           end
 
