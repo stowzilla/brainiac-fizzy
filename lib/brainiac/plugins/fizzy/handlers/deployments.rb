@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "shellwords"
+require "net/http"
+require "uri"
 
 # Deployment environment tracking.
 # Tracks which dev environments have active card deploys and which are available.
@@ -382,4 +384,41 @@ def parse_tfvars(contents)
     vars[match[1]] = match[2] if match
   end
   vars
+end
+
+# Is a Belt env's frontend actually live? Derives the public URL from the
+# worktree's infrastructure/<env>/terraform.tfvars and does a HEAD request.
+#
+# This is the honest signal for "already provisioned": a live site means the
+# S3 bucket / CloudFront / backend exist, so the frontend-only deploy shortcut
+# is safe. Anything else (never applied, DNS/CloudFront still propagating,
+# connection refused) reads as not-live and callers should do a full deploy.
+#
+# A false negative during CloudFront/DNS/ACM propagation just triggers a
+# (redundant but harmless) full deploy — never a skipped provisioning step.
+def ephemeral_env_live?(worktree_path, env_name, timeout: 5)
+  tfvars = File.join(worktree_path, "infrastructure", env_name, "terraform.tfvars")
+  return false unless File.exist?(tfvars)
+
+  url = ephemeral_url_from_tfvars(tfvars)
+  return false unless url
+
+  frontend_url_live?(url, timeout: timeout)
+end
+
+# HEAD the URL; treat any 2xx/3xx as live. Any error (refused, timeout,
+# NXDOMAIN, TLS failure) means not live. HEAD keeps us from pulling the bundle.
+def frontend_url_live?(url, timeout: 5)
+  uri = URI.parse(url)
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = (uri.scheme == "https")
+  http.open_timeout = timeout
+  http.read_timeout = timeout
+
+  response = http.request_head(uri.request_uri.empty? ? "/" : uri.request_uri)
+  code = response.code.to_i
+  code >= 200 && code < 400
+rescue StandardError => e
+  LOG.info "[Fizzy:Deploy] Frontend probe for #{url} not live: #{e.class}: #{e.message}" if defined?(LOG)
+  false
 end

@@ -392,7 +392,14 @@ def create_and_deploy_ephemeral_env(worktree_path:, env_name:, parent_env:, card
   LOG.info "[EphemeralEnv] Configured #{env_name} in worktree, deploying in background"
 
   Thread.new do
-    frontend_only = BeltEnvironment.frontend_only_changes?(worktree: worktree_path)
+    # First provisioning of a fresh env must be a full deploy — it stands up
+    # S3/CloudFront/backend. The frontend-only shortcut is only safe once the
+    # env is actually live (probe the derived public URL). Otherwise `belt
+    # deploy frontend` runs against a bucket that doesn't exist yet and fails
+    # with "Could not determine S3 bucket."
+    frontend_only =
+      ephemeral_env_live?(worktree_path, env_name) &&
+      BeltEnvironment.frontend_only_changes?(worktree: worktree_path)
     BeltEnvironment.deploy(worktree: worktree_path, env_name: env_name, frontend_only: frontend_only)
   rescue StandardError => e
     LOG.error "[EphemeralEnv] Error deploying '#{env_name}': #{e.message}"
