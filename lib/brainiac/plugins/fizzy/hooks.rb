@@ -214,8 +214,16 @@ module Brainiac
               uat_col = Config.board_column_id(board_key, "uat")
               next [] unless uat_col
 
+              # The fizzy CLI's --column filter only works when scoped to a board.
+              # Without --board, `fizzy card list --column <id>` returns zero cards
+              # even when the column is populated, so the deploy would silently close
+              # nothing. Always pass the board ID alongside the column.
+              board_id = Config.board_config(board_key)&.dig("board_id")
+              next [] unless board_id
+
               env = Helpers.default_fizzy_env
-              output = run_cmd("fizzy", "card", "list", "--column", uat_col, "--all",
+              output = run_cmd("fizzy", "card", "list", "--board", board_id,
+                               "--column", uat_col, "--all",
                                chdir: repo_path, env: env)
               card_list = JSON.parse(output)["data"] || []
               next [] if card_list.empty?
