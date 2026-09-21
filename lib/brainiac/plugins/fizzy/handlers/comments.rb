@@ -147,13 +147,23 @@ def build_comment_context(eventable:, plain_text:, tags:, card_internal_id:, car
     card_tags: card_tags,
     worktree_override: resolve_worktree_override(tags, project_config),
     fresh: tags[:fresh],
-    profile: tags[:profile],
+    profile: detect_comment_profile(plain_text, card_tags, tags),
     comment_vars: {
       "COMMENT_CREATOR" => creator_name || "Unknown",
       "COMMENT_ID" => comment_id.to_s,
       "COMMENT_BODY" => clean_text
     }
   )
+end
+
+# Resolve the profile for a comment: prefer core's tag-aware detect_profile
+# (inline text + card tags), falling back to inline-only for older core.
+def detect_comment_profile(plain_text, card_tags, tags)
+  if defined?(detect_profile)
+    detect_profile(text: plain_text, tags: card_tags)
+  else
+    tags[:profile]
+  end
 end
 
 def check_mention_gates(mentioned_agent, plain_text)

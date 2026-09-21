@@ -49,9 +49,14 @@ def handle_card_assigned(payload, board_key: nil)
   initial_cli = detect_cli_provider(tags: tags)
   initial_model, initial_model_explicit = detect_model_explicit(project_config, tags: tags)
   initial_effort = detect_effort(project_config, tags: tags)
-  # Profile ([profile:X]/[p:X]) can be specified inline in the card title.
+  # Profile ([profile:X]/[p:X]) can be specified inline in the card title OR as a
+  # card tag (a `p:k+`/`profile:k+` chip, or a bare chip matching a known profile).
   # It's a named env bundle (e.g. an alternate kiro-cli account) — see core profiles.rb.
-  initial_profile = parse_inline_tags(title.to_s)[:profile]
+  initial_profile = if defined?(detect_profile)
+                      detect_profile(text: title.to_s, tags: tags)
+                    else
+                      parse_inline_tags(title.to_s)[:profile]
+                    end
 
   # Persist initial overrides from card tags to the work item
   resolve_work_item_overrides(
