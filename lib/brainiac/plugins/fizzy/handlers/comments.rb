@@ -112,24 +112,30 @@ def build_comment_context(eventable:, plain_text:, tags:, card_internal_id:, car
   inline_cli = detect_cli_provider(text: plain_text, tags: card_tags)
   inline_model, inline_model_explicit = detect_model_explicit(project_config, text: plain_text)
   inline_effort = detect_effort(project_config, tags: card_tags, text: plain_text)
+  inline_profile = detect_comment_profile(plain_text, card_tags, tags)
 
   # Resolve overrides against the work item — merges stored overrides with inline tags
-  # and persists any new inline tags for future dispatches.
+  # and persists any new inline tags for future dispatches. The profile is sticky too:
+  # a [p:k+] comment keeps later untagged comments on k+ until a different [p:X].
   branch = card_info["branch"] if card_info.is_a?(Hash)
   if branch
+    profile_kwargs = work_item_overrides_support_profile? ? { inline_profile: inline_profile } : {}
     resolved = resolve_work_item_overrides(
       branch: branch,
       inline_cli_provider: inline_cli,
       inline_model: inline_model,
-      inline_effort: inline_effort
+      inline_effort: inline_effort,
+      **profile_kwargs
     )
     effective_cli = resolved[:cli_provider]
     effective_model = resolved[:model]
     effective_effort = resolved[:effort]
+    effective_profile = resolved.fetch(:profile, inline_profile)
   else
     effective_cli = inline_cli
     effective_model = inline_model
     effective_effort = inline_effort
+    effective_profile = inline_profile
   end
 
   CommentContext.new(
@@ -147,13 +153,18 @@ def build_comment_context(eventable:, plain_text:, tags:, card_internal_id:, car
     card_tags: card_tags,
     worktree_override: resolve_worktree_override(tags, project_config),
     fresh: tags[:fresh],
-    profile: detect_comment_profile(plain_text, card_tags, tags),
+    profile: effective_profile,
     comment_vars: {
       "COMMENT_CREATOR" => creator_name || "Unknown",
       "COMMENT_ID" => comment_id.to_s,
       "COMMENT_BODY" => clean_text
     }
   )
+end
+
+# Older core builds' resolve_work_item_overrides has no inline_profile: keyword.
+def work_item_overrides_support_profile?
+  method(:resolve_work_item_overrides).parameters.any? { |t, n| t == :key && n == :inline_profile }
 end
 
 # Resolve the profile for a comment: prefer core's tag-aware detect_profile
