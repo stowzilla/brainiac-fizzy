@@ -58,12 +58,15 @@ def handle_card_assigned(payload, board_key: nil)
                       parse_inline_tags(title.to_s)[:profile]
                     end
 
-  # Persist initial overrides from card tags to the work item
+  # Persist initial overrides from card tags to the work item (profile included, so
+  # later comments without a [p:X] keep using it).
+  profile_kwargs = work_item_overrides_support_profile? ? { inline_profile: initial_profile } : {}
   resolve_work_item_overrides(
     branch: branch,
     inline_cli_provider: initial_cli,
     inline_model: initial_model,
-    inline_effort: initial_effort
+    inline_effort: initial_effort,
+    **profile_kwargs
   )
 
   maybe_create_ephemeral_belt_env(
