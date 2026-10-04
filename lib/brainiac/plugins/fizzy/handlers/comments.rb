@@ -110,7 +110,7 @@ def build_comment_context(eventable:, plain_text:, tags:, card_internal_id:, car
   clean_text = tags[:clean_text]
 
   inline_cli = detect_cli_provider(text: plain_text, tags: card_tags)
-  inline_model, inline_model_explicit = detect_model_explicit(project_config, text: plain_text)
+  inline_model, inline_model_explicit = detect_model_explicit(project_config, text: plain_text, tags: card_tags)
   inline_effort = detect_effort(project_config, tags: card_tags, text: plain_text)
   inline_profile = detect_comment_profile(plain_text, card_tags, tags)
 
