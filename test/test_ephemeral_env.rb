@@ -27,13 +27,15 @@ end
 
 module BeltEnvironment
   class << self
-    attr_accessor :created, :deployed, :create_calls, :deploy_calls
+    attr_accessor :created, :deployed, :create_calls, :deploy_calls, :create_result, :deploy_error
 
     def reset!
       @created = false
       @deployed = false
       @create_calls = []
       @deploy_calls = []
+      @create_result = :ok
+      @deploy_error = nil
     end
 
     def belt_app?(path)
@@ -43,11 +45,13 @@ module BeltEnvironment
     def create_environment(worktree:, env_name:, parent_env:)
       @create_calls << { worktree: worktree, env_name: env_name, parent_env: parent_env }
       @created = true
-      :ok
+      @create_result
     end
 
     def deploy(worktree:, env_name:, frontend_only: false)
       @deploy_calls << { worktree: worktree, env_name: env_name, frontend_only: frontend_only }
+      raise @deploy_error if @deploy_error
+
       @deployed = true
       :ok
     end
@@ -164,5 +168,50 @@ class TestMaybeCreateEphemeralBeltEnv < Minitest::Test
     refute BeltEnvironment.created
   ensure
     Object.define_method(:run_cmd, original)
+  end
+
+  # --- force: true (manual `env setup` / API) — synchronous deploy ---------
+
+  def test_force_deploys_synchronously
+    maybe_create_ephemeral_belt_env(
+      worktree_path: @worktree, card_number: 1299, project_key: "feature-parity",
+      force: true
+    )
+    # No Thread.new — deploy has already run by the time the call returns.
+    assert BeltEnvironment.created
+    assert BeltEnvironment.deployed
+    assert_equal "fizzy-1299", BeltEnvironment.deploy_calls.first[:env_name]
+  end
+
+  def test_force_skips_tag_resolution
+    # force bypasses the deploy-tag gate even with no deploy tag present.
+    maybe_create_ephemeral_belt_env(
+      worktree_path: @worktree, card_number: 1299, project_key: "feature-parity",
+      tags: %w[opus], force: true
+    )
+    assert BeltEnvironment.created
+    assert BeltEnvironment.deployed
+  end
+
+  def test_force_raises_on_deploy_failure
+    BeltEnvironment.deploy_error = StandardError.new("terraform apply failed")
+    error = assert_raises(StandardError) do
+      maybe_create_ephemeral_belt_env(
+        worktree_path: @worktree, card_number: 1299, project_key: "feature-parity",
+        force: true
+      )
+    end
+    assert_match(/terraform apply failed/, error.message)
+  end
+
+  def test_force_raises_on_create_failure
+    BeltEnvironment.create_result = nil
+    assert_raises(StandardError) do
+      maybe_create_ephemeral_belt_env(
+        worktree_path: @worktree, card_number: 1299, project_key: "feature-parity",
+        force: true
+      )
+    end
+    refute BeltEnvironment.deployed
   end
 end
