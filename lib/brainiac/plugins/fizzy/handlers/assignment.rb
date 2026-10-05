@@ -269,12 +269,16 @@ def maybe_create_ephemeral_belt_env(worktree_path:, card_number:, project_key:, 
   end
 
   LOG.info "[EphemeralEnv] Card ##{card_number} has deploy tag; #{env_name} not in worktree — creating from '#{parent_env}'"
+  # Manual setups (force: true) have a caller waiting on the result — there is
+  # no agent to unblock, so deploy synchronously and let failures surface.
+  # Agent-triggered deploys stay backgrounded so the agent isn't blocked.
   create_and_deploy_ephemeral_env(
     worktree_path: worktree_path, env_name: env_name, parent_env: parent_env,
-    card_number: card_number, project_key: project_key
+    card_number: card_number, project_key: project_key, synchronous: force
   )
 rescue StandardError => e
   LOG.error "[EphemeralEnv] Error creating ephemeral env: #{e.message}"
+  raise if force
 end
 
 def ensure_ephemeral_env_for_comment(ctx, card_number, worktree)
@@ -383,12 +387,14 @@ def track_ephemeral_env_if_needed(env_name, card_number, project_key, parent_env
                                  "worktree" => worktree_path)
 end
 
-def create_and_deploy_ephemeral_env(worktree_path:, env_name:, parent_env:, card_number:, project_key:)
+def create_and_deploy_ephemeral_env(worktree_path:, env_name:, parent_env:, card_number:, project_key:, synchronous: false)
   success = BeltEnvironment.create_environment(
     worktree: worktree_path, env_name: env_name, parent_env: parent_env
   )
   unless success
     LOG.error "[EphemeralEnv] Failed to create environment '#{env_name}'"
+    raise "Failed to create environment '#{env_name}'" if synchronous
+
     return
   end
 
@@ -397,19 +403,31 @@ def create_and_deploy_ephemeral_env(worktree_path:, env_name:, parent_env:, card
                                  "project" => project_key,
                                  "parent_env" => parent_env,
                                  "worktree" => worktree_path)
-  LOG.info "[EphemeralEnv] Configured #{env_name} in worktree, deploying in background"
 
-  Thread.new do
-    # First provisioning of a fresh env must be a full deploy — it stands up
-    # S3/CloudFront/backend. The frontend-only shortcut is only safe once the
-    # env is actually live (probe the derived public URL). Otherwise `belt
-    # deploy frontend` runs against a bucket that doesn't exist yet and fails
-    # with "Could not determine S3 bucket."
-    frontend_only =
-      ephemeral_env_live?(worktree_path, env_name) &&
-      BeltEnvironment.frontend_only_changes?(worktree: worktree_path)
-    BeltEnvironment.deploy(worktree: worktree_path, env_name: env_name, frontend_only: frontend_only)
-  rescue StandardError => e
-    LOG.error "[EphemeralEnv] Error deploying '#{env_name}': #{e.message}"
+  if synchronous
+    LOG.info "[EphemeralEnv] Configured #{env_name} in worktree, deploying synchronously"
+    deploy_ephemeral_env(worktree_path, env_name)
+  else
+    LOG.info "[EphemeralEnv] Configured #{env_name} in worktree, deploying in background"
+    Thread.new do
+      deploy_ephemeral_env(worktree_path, env_name)
+    rescue StandardError => e
+      LOG.error "[EphemeralEnv] Error deploying '#{env_name}': #{e.message}"
+    end
   end
+end
+
+# Run the actual `belt deploy` for a freshly configured ephemeral env.
+# Raises on failure so synchronous callers can surface the error; the
+# background path wraps this in its own rescue.
+def deploy_ephemeral_env(worktree_path, env_name)
+  # First provisioning of a fresh env must be a full deploy — it stands up
+  # S3/CloudFront/backend. The frontend-only shortcut is only safe once the
+  # env is actually live (probe the derived public URL). Otherwise `belt
+  # deploy frontend` runs against a bucket that doesn't exist yet and fails
+  # with "Could not determine S3 bucket."
+  frontend_only =
+    ephemeral_env_live?(worktree_path, env_name) &&
+    BeltEnvironment.frontend_only_changes?(worktree: worktree_path)
+  BeltEnvironment.deploy(worktree: worktree_path, env_name: env_name, frontend_only: frontend_only)
 end
