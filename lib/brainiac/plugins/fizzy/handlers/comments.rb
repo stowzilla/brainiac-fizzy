@@ -794,7 +794,7 @@ def build_followup_prompt(ctx, card_number, card_tags, work_dir)
   else
     # Use split context for follow-ups: card details at top, comment history AFTER triggering comment
     followup_ctx = prefetch_followup_context(card_number, repo_path: ctx.project_config["repo_path"],
-                                             agent_name: ctx.agent_name)
+                                                          agent_name: ctx.agent_name)
     render_prompt(PROMPT_FOLLOWUP_NO_WORKTREE,
                   ctx.comment_vars.merge("CARD_INTERNAL_ID" => ctx.card_internal_id, "CARD_ID" => ctx.card_internal_id),
                   brain_context: build_brain_context(
@@ -811,7 +811,7 @@ def build_planning_followup_prompt(ctx, card_number, card_id, work_dir)
   if work_dir == ctx.project_config["repo_path"]
     # Use split context for follow-ups: card details at top, comment history AFTER triggering comment
     followup_ctx = prefetch_followup_context(card_number, repo_path: ctx.project_config["repo_path"],
-                                             agent_name: ctx.agent_name)
+                                                          agent_name: ctx.agent_name)
     render_planning_prompt(PROMPT_FOLLOWUP_NO_WORKTREE,
                            ctx.comment_vars.merge("CARD_INTERNAL_ID" => ctx.card_internal_id, "CARD_ID" => card_id),
                            brain_context: build_brain_context(
