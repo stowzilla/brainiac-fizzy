@@ -780,46 +780,58 @@ def build_followup_prompt(ctx, card_number, card_tags, work_dir)
   if planning_info
     build_planning_followup_prompt(ctx, card_number, planning_info[:card_id], work_dir)
   elsif work_dir != ctx.project_config["repo_path"]
+    # Use split context for follow-ups: card details at top, comment history AFTER triggering comment
+    followup_ctx = prefetch_followup_context(card_number, repo_path: work_dir, agent_name: ctx.agent_name)
     render_prompt(PROMPT_FOLLOWUP_WORKTREE,
                   ctx.comment_vars.merge("CARD_NUMBER" => card_number, "CARD_ID" => card_number),
                   brain_context: build_brain_context(
                     agent_name: ctx.agent_name, card_number: card_number,
                     project_key: ctx.project_key, comment_body: ctx.plain_text, source: :fizzy
                   ),
-                  card_context: prefetch_card_context(card_number, repo_path: work_dir, agent_name: ctx.agent_name),
+                  card_context: followup_ctx[:card_details],
+                  comment_history: followup_ctx[:comment_history],
                   agent_name: ctx.agent_name)
   else
+    # Use split context for follow-ups: card details at top, comment history AFTER triggering comment
+    followup_ctx = prefetch_followup_context(card_number, repo_path: ctx.project_config["repo_path"],
+                                             agent_name: ctx.agent_name)
     render_prompt(PROMPT_FOLLOWUP_NO_WORKTREE,
                   ctx.comment_vars.merge("CARD_INTERNAL_ID" => ctx.card_internal_id, "CARD_ID" => ctx.card_internal_id),
                   brain_context: build_brain_context(
                     agent_name: ctx.agent_name, project_key: ctx.project_key,
                     comment_body: ctx.plain_text, source: :fizzy
                   ),
-                  card_context: prefetch_card_context(card_number, repo_path: ctx.project_config["repo_path"],
-                                                                   agent_name: ctx.agent_name),
+                  card_context: followup_ctx[:card_details],
+                  comment_history: followup_ctx[:comment_history],
                   agent_name: ctx.agent_name)
   end
 end
 
 def build_planning_followup_prompt(ctx, card_number, card_id, work_dir)
   if work_dir == ctx.project_config["repo_path"]
+    # Use split context for follow-ups: card details at top, comment history AFTER triggering comment
+    followup_ctx = prefetch_followup_context(card_number, repo_path: ctx.project_config["repo_path"],
+                                             agent_name: ctx.agent_name)
     render_planning_prompt(PROMPT_FOLLOWUP_NO_WORKTREE,
                            ctx.comment_vars.merge("CARD_INTERNAL_ID" => ctx.card_internal_id, "CARD_ID" => card_id),
                            brain_context: build_brain_context(
                              agent_name: ctx.agent_name, project_key: ctx.project_key,
                              comment_body: ctx.plain_text, source: :fizzy
                            ),
-                           card_context: prefetch_card_context(card_number, repo_path: ctx.project_config["repo_path"],
-                                                                            agent_name: ctx.agent_name),
+                           card_context: followup_ctx[:card_details],
+                           comment_history: followup_ctx[:comment_history],
                            agent_name: ctx.agent_name)
   else
+    # Use split context for follow-ups: card details at top, comment history AFTER triggering comment
+    followup_ctx = prefetch_followup_context(card_number, repo_path: work_dir, agent_name: ctx.agent_name)
     render_planning_prompt(PROMPT_FOLLOWUP_WORKTREE,
                            ctx.comment_vars.merge("CARD_NUMBER" => card_number, "CARD_ID" => card_id),
                            brain_context: build_brain_context(
                              agent_name: ctx.agent_name, card_number: card_number,
                              project_key: ctx.project_key, comment_body: ctx.plain_text, source: :fizzy
                            ),
-                           card_context: prefetch_card_context(card_number, repo_path: work_dir, agent_name: ctx.agent_name),
+                           card_context: followup_ctx[:card_details],
+                           comment_history: followup_ctx[:comment_history],
                            agent_name: ctx.agent_name)
   end
 end

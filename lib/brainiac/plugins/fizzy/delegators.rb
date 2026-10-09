@@ -25,6 +25,10 @@ def prefetch_card_context(card_number, repo_path:, agent_name: nil)
   Brainiac::Plugins::Fizzy::Helpers.prefetch_card_context(card_number, repo_path: repo_path, agent_name: agent_name)
 end
 
+def prefetch_followup_context(card_number, repo_path:, agent_name: nil)
+  Brainiac::Plugins::Fizzy::Helpers.prefetch_followup_context(card_number, repo_path: repo_path, agent_name: agent_name)
+end
+
 def tag_names(tags)
   Brainiac::Plugins::Fizzy::Helpers.tag_names(tags)
 end
@@ -164,8 +168,8 @@ DEFAULT_COLUMN_IDS = {
 # Render planning mode prompt — identical to render_prompt but inserts the planning
 # instructions between PROMPT_CORE and the channel rules. This was originally defined
 # in brainiac core's planning.rb but belongs here after the fizzy extraction.
-def render_planning_prompt(situation_template, vars = {}, brain_context: "", card_context: "", agent_name: AI_AGENT_NAME,
-                           channel: :fizzy, board_key: nil)
+def render_planning_prompt(situation_template, vars = {}, brain_context: "", card_context: "", comment_history: "",
+                           agent_name: AI_AGENT_NAME, channel: :fizzy, board_key: nil)
   plans_dir = Brainiac::Plugins::Fizzy::Planning::PLANS_DIR
   plan_file = File.join(plans_dir, "card-#{vars["CARD_ID"]}-plan.md")
 
@@ -177,6 +181,10 @@ def render_planning_prompt(situation_template, vars = {}, brain_context: "", car
   plugin_prompt = Brainiac.channel_prompts[channel]
   result += plugin_prompt || CHANNEL_PROMPTS.fetch(channel, "")
   result += situation_template
+
+  # Comment history (for follow-up scenarios): placed AFTER the triggering comment
+  # so the agent sees the current request first, then can reference history as needed
+  result += comment_history unless comment_history.empty?
 
   # Pre-post comment check (same as render_prompt — use plugin-registered lookup)
   plugin_pre_post = Brainiac.channel_pre_post_checks[channel]
