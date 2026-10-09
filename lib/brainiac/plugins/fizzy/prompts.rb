@@ -85,11 +85,11 @@ module Brainiac
           {{COMMENT_BODY}}
           """
 
-          **Your task:** Respond to the comment above. This is the ONLY thing the user is asking for right now.
-          - Do NOT summarize previous work unless explicitly asked
-          - Do NOT address topics from older comments — focus on THIS comment
-          - If the user asks a question, answer the question
-          - If the user requests a change, make that specific change
+          **Your task:** This comment is your PRIMARY focus. What the user says HERE takes priority.
+          - If you were given a multi-step task and this comment clarifies/modifies one step, apply the clarification AND still complete the other steps
+          - If the user asks a new question, answer that question — don't summarize prior work
+          - If the user requests a specific change, make that change
+          - Check your memory file for context on what's already been discussed/decided
 
           You are in the existing worktree for this card. If you've already addressed what's being asked in a previous session, reply confirming it's done.
 
@@ -105,11 +105,11 @@ module Brainiac
           {{COMMENT_BODY}}
           """
 
-          **Your task:** Respond to the comment above. This is the ONLY thing the user is asking for right now.
-          - Do NOT summarize previous work unless explicitly asked
-          - Do NOT address topics from older comments — focus on THIS comment
-          - If the user asks a question, answer the question
-          - If the user requests a change, make that specific change
+          **Your task:** This comment is your PRIMARY focus. What the user says HERE takes priority.
+          - If you were given a multi-step task and this comment clarifies/modifies one step, apply the clarification AND still complete the other steps
+          - If the user asks a new question, answer that question — don't summarize prior work
+          - If the user requests a specific change, make that change
+          - Check your memory file for context on what's already been discussed/decided
 
           If you've already addressed what's being asked, reply confirming it's done.
         PROMPT
