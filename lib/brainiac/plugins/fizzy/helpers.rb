@@ -60,6 +60,35 @@ module Brainiac
             context
           end
 
+          # Split card context for follow-up scenarios:
+          # - Returns card_details (title + body) separately from comment_history
+          # - This allows placing the triggering comment BEFORE historical comments
+          #   so agents focus on the current request, not the full card history
+          # - Uses fewer comments (5 instead of 15) since the agent has memory
+          def prefetch_followup_context(card_number, repo_path:, agent_name: nil)
+            env = fizzy_env_for(agent_name || AI_AGENT_NAME)
+            card_details = fetch_card_details(card_number, repo_path: repo_path, env: env)
+            # Fewer comments for follow-ups — agent has memory from prior sessions
+            card_comments = fetch_card_comments(card_number, repo_path: repo_path, env: env, limit: 5)
+
+            details_context = card_details.empty? ? "" : "## Card Details\n#{card_details}\n\n"
+
+            # Format comment history as secondary reference (placed after triggering comment)
+            history_context = ""
+            unless card_comments.empty?
+              history_context = <<~HISTORY
+
+                ## Recent Comment History (for reference)
+                These are the last few comments on the card. Your PRIMARY focus is the triggering comment above,
+                but you can reference this history if needed for context.
+
+                #{card_comments}
+              HISTORY
+            end
+
+            { card_details: details_context, comment_history: history_context }
+          end
+
           # Normalize Fizzy tags from webhook hashes ({ "name" => "deploy" })
           # or API strings ("deploy") into a lowercase name list.
           def tag_names(tags)
@@ -105,12 +134,12 @@ module Brainiac
             ""
           end
 
-          def fetch_card_comments(card_number, repo_path:, env:)
+          def fetch_card_comments(card_number, repo_path:, env:, limit: 15)
             output = run_cmd("fizzy", "comment", "list", "--card", card_number.to_s, "--all", chdir: repo_path, env: env)
             comments = JSON.parse(output)["data"] || []
             return "" if comments.empty?
 
-            comments.last(15).map do |c|
+            comments.last(limit).map do |c|
               body = c.dig("body", "plain_text") || ""
               body = "#{body[0..500]}..." if body.length > 500
               "**#{c.dig("creator", "name")}** (#{c["id"]}):\n#{body}"

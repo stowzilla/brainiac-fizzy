@@ -78,31 +78,40 @@ module Brainiac
         PROMPT
 
         FOLLOWUP_WORKTREE = <<~'PROMPT'
-          There's a new comment on Fizzy card #{{CARD_NUMBER}} that you've already started working on.
-          You are in the existing worktree for this card.
+          ## ⚠️ CURRENT REQUEST — This is what you need to address NOW
 
-          The comment from {{COMMENT_CREATOR}} (comment ID: {{COMMENT_ID}}):
+          **New comment from {{COMMENT_CREATOR}}** on Fizzy card #{{CARD_NUMBER}} (comment ID: {{COMMENT_ID}}):
           """
           {{COMMENT_BODY}}
           """
 
-          Focus your response on the comment above. If you've already addressed this in a previous session, reply confirming it's done.
-          Otherwise, make the requested changes, commit, and push.
+          **Your task:** This comment is your PRIMARY focus. What the user says HERE takes priority.
+          - If you were given a multi-step task and this comment clarifies/modifies one step, apply the clarification AND still complete the other steps
+          - If the user asks a new question, answer that question — don't summarize prior work
+          - If the user requests a specific change, make that change
+          - Check your memory file for context on what's already been discussed/decided
+
+          You are in the existing worktree for this card. If you've already addressed what's being asked in a previous session, reply confirming it's done.
 
           **Response destination: Post your response as a comment on Fizzy card #{{CARD_NUMBER}}.**
           Do NOT post comments on the GitHub PR — this conversation is happening on the card.
         PROMPT
 
         FOLLOWUP_NO_WORKTREE = <<~PROMPT
-          There's a new comment on a Fizzy card (internal_id: "{{CARD_INTERNAL_ID}}").
+          ## ⚠️ CURRENT REQUEST — This is what you need to address NOW
 
-          The comment from {{COMMENT_CREATOR}} (comment ID: {{COMMENT_ID}}):
+          **New comment from {{COMMENT_CREATOR}}** on Fizzy card (internal_id: "{{CARD_INTERNAL_ID}}") (comment ID: {{COMMENT_ID}}):
           """
           {{COMMENT_BODY}}
           """
 
-          Focus your response on the comment above. If you've already addressed this, reply confirming it's done.
-          Otherwise, respond accordingly.
+          **Your task:** This comment is your PRIMARY focus. What the user says HERE takes priority.
+          - If you were given a multi-step task and this comment clarifies/modifies one step, apply the clarification AND still complete the other steps
+          - If the user asks a new question, answer that question — don't summarize prior work
+          - If the user requests a specific change, make that change
+          - Check your memory file for context on what's already been discussed/decided
+
+          If you've already addressed what's being asked, reply confirming it's done.
         PROMPT
 
         MENTION = <<~PROMPT
