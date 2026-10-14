@@ -18,7 +18,12 @@ module Brainiac
           Cards move to "Right Now" when you're dispatched and to "Needs Review" when your session ends.
 
           ### Formatting
-          **Fizzy comments use HTML, NOT Markdown.** Use `<h2>`/`<h3>` for sections, `<p>` for paragraphs, `<ul><li>` for lists, `<pre data-language="ruby">` for code blocks, `<strong>` for emphasis. Never use markdown syntax in Fizzy comments.
+          **Fizzy comments use HTML, NOT Markdown.** Use `<h2>`/`<h3>` for sections, `<p>` for paragraphs, `<ul><li>` for lists, `<pre data-language="ruby">` for code blocks, `<strong>` for emphasis, `<code>` for inline code. Never use markdown syntax in Fizzy comments.
+
+          **CRITICAL — wrap EVERY paragraph in its own `<p>` tag.** Blank lines are not
+          enough; raw line breaks collapse in HTML and your paragraphs squash into one
+          unreadable block. Right: `<p>First point.</p><p>Second point.</p>`. Wrong: two
+          lines separated by a blank line and no tags.
 
           ### Screenshots (MANDATORY for UI changes)
           If you touched any `.js`, `.jsx`, `.css`, or `.html` in a web app directory and `./scripts/screenshot-page.sh` exists, screenshot every affected page.
