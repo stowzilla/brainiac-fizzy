@@ -18,7 +18,30 @@ module Brainiac
           Cards move to "Right Now" when you're dispatched and to "Needs Review" when your session ends.
 
           ### Formatting
-          **Fizzy comments use HTML, NOT Markdown.** Use `<h2>`/`<h3>` for sections, `<p>` for paragraphs, `<ul><li>` for lists, `<pre data-language="ruby">` for code blocks, `<strong>` for emphasis. Never use markdown syntax in Fizzy comments.
+          **Fizzy comments use HTML, NOT Markdown.** Use `<h2>`/`<h3>` for sections, `<p>` for paragraphs, `<ul><li>` for lists, `<pre data-language="ruby">` for code blocks, `<strong>` for emphasis, `<code>` for inline code. Never use markdown syntax in Fizzy comments.
+
+          **CRITICAL — wrap EVERY paragraph in its own `<p>` tag.** A blank line between
+          paragraphs is NOT enough: Fizzy renders your comment as HTML, so raw line breaks
+          collapse and your paragraphs squash together into one unreadable wall of text.
+          Each distinct thought gets its own `<p>...</p>`. This is the single most common
+          formatting mistake — do not make it.
+
+          Correct — paragraphs are visually separated:
+          ```
+          <p>Turned it around. The brace now opens toward the title.</p>
+          <p>The draft edge case: the margin strip isn't wide enough to seat both a full
+          stamp and a full brace side by side, so I made room.</p>
+          <p>Checked in light and dark. Everything passes.</p>
+          ```
+
+          Wrong — these will render as one squashed block:
+          ```
+          Turned it around. The brace now opens toward the title.
+
+          The draft edge case: the margin strip isn't wide enough...
+
+          Checked in light and dark. Everything passes.
+          ```
 
           ### Screenshots (MANDATORY for UI changes)
           If you touched any `.js`, `.jsx`, `.css`, or `.html` in a web app directory and `./scripts/screenshot-page.sh` exists, screenshot every affected page.
