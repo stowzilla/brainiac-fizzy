@@ -109,15 +109,16 @@ def build_comment_context(eventable:, plain_text:, tags:, card_internal_id:, car
   card_tags = eventable.dig("card", "tags") || []
   clean_text = tags[:clean_text]
 
+  branch = card_info["branch"] if card_info.is_a?(Hash)
   inline_cli = detect_cli_provider(text: plain_text, tags: card_tags)
-  inline_model, inline_model_explicit = detect_model_explicit(project_config, text: plain_text, tags: card_tags)
+  inline_model, inline_model_explicit = detect_comment_model(project_config, plain_text, card_tags,
+                                                             inline_cli: inline_cli, branch: branch, agent_name: agent_name)
   inline_effort = detect_effort(project_config, tags: card_tags, text: plain_text)
   inline_profile = detect_comment_profile(plain_text, card_tags, tags)
 
   # Resolve overrides against the work item — merges stored overrides with inline tags
   # and persists any new inline tags for future dispatches. The profile is sticky too:
   # a [p:k+] comment keeps later untagged comments on k+ until a different [p:X].
-  branch = card_info["branch"] if card_info.is_a?(Hash)
   if branch
     profile_kwargs = work_item_overrides_support_profile? ? { inline_profile: inline_profile } : {}
     resolved = resolve_work_item_overrides(
@@ -160,6 +161,20 @@ def build_comment_context(eventable:, plain_text:, tags:, card_internal_id:, car
       "COMMENT_BODY" => clean_text
     }
   )
+end
+
+# Resolve a [model] tag against the CLI provider that will actually run this comment
+# (inline [cli:X], else the work item's sticky provider, else the agent/project default).
+# Model maps are per provider: [sonnet] is claude-sonnet-4.6 under kiro but `sonnet`
+# under claude, and run_agent drops any ID the running provider doesn't know.
+#
+# Returns [model, explicit]. The model is nil unless a tag matched, so an untagged
+# comment falls through to the work item's stored model instead of the project default.
+def detect_comment_model(project_config, plain_text, card_tags, inline_cli:, branch:, agent_name:)
+  model_cli = inline_cli || (work_item_overrides_for(branch: branch)["cli_provider"] if branch)
+  model, explicit = detect_model_explicit(project_config, text: plain_text, tags: card_tags,
+                                                          cli_provider_override: model_cli, agent_name: agent_name)
+  [explicit ? model : nil, explicit]
 end
 
 # Older core builds' resolve_work_item_overrides has no inline_profile: keyword.

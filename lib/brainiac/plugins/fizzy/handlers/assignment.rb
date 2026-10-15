@@ -40,14 +40,17 @@ def handle_card_assigned(payload, board_key: nil)
     return [200, { status: "ignored", reason: "session already active" }.to_json]
   end
 
+  # Model tags resolve against the provider that will run (a cli:X chip), not the default's map.
+  initial_cli = detect_cli_provider(tags: tags)
+  initial_model, initial_model_explicit = detect_model_explicit(project_config, tags: tags, cli_provider_override: initial_cli,
+                                                                                agent_name: assigned_agent)
+
   LOG.info "Card ##{card_number} assigned to #{assigned_agent} for project '#{project_key}', " \
-           "creating worktree: #{branch} (model: #{detect_model(project_config, tags: tags) || "default"})"
+           "creating worktree: #{branch} (model: #{initial_model || "default"})"
 
   react_to_assignment(card_number, repo_path, assigned_agent)
   worktree_path = setup_assigned_worktree(repo_path, branch, card_internal_id, card_number, project_key, assigned_agent, board_key: board_key)
 
-  initial_cli = detect_cli_provider(tags: tags)
-  initial_model, initial_model_explicit = detect_model_explicit(project_config, tags: tags)
   initial_effort = detect_effort(project_config, tags: tags)
   # Profile ([profile:X]/[p:X]) can be specified inline in the card title OR as a
   # card tag (a `p:k+`/`profile:k+` chip, or a bare chip matching a known profile).
@@ -59,12 +62,13 @@ def handle_card_assigned(payload, board_key: nil)
                     end
 
   # Persist initial overrides from card tags to the work item (profile included, so
-  # later comments without a [p:X] keep using it).
+  # later comments without a [p:X] keep using it). Only a tagged model is persisted;
+  # the project default must not get pinned to the card.
   profile_kwargs = work_item_overrides_support_profile? ? { inline_profile: initial_profile } : {}
   resolve_work_item_overrides(
     branch: branch,
     inline_cli_provider: initial_cli,
-    inline_model: initial_model,
+    inline_model: (initial_model if initial_model_explicit),
     inline_effort: initial_effort,
     **profile_kwargs
   )
