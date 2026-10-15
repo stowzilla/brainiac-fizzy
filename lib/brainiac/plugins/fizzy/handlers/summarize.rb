@@ -32,7 +32,8 @@ module Brainiac
             end
 
             pid, log_file = dispatch_summarize_agent(card_number, card_title, branch, agent_name,
-                                                     project_config, worktree_path)
+                                                     project_config, worktree_path,
+                                                     overrides: work_item&.dig("overrides") || {})
             register_session("card-#{card_number}-summarize", pid, log_file: log_file, agent_name: agent_name)
 
             monitor_summarize_session(pid, card_number, agent_name, branch, repo_path, session_started_at,
@@ -98,7 +99,10 @@ module Brainiac
             end
           end
 
-          def dispatch_summarize_agent(card_number, card_title, branch, agent_name, project_config, worktree_path)
+          # Runs on the card's stored cli_provider/model/effort/profile so the summary comes from
+          # the same CLI that did the work (not the project default, e.g. kiro after a [cli:claude] run).
+          def dispatch_summarize_agent(card_number, card_title, branch, agent_name, project_config, worktree_path,
+                                       overrides: {})
             prompt = render_prompt(Prompts::SUMMARIZE_WORK,
                                    { "CARD_NUMBER" => card_number, "CARD_TITLE" => card_title, "BRANCH" => branch },
                                    brain_context: "", agent_name: agent_name, channel: :fizzy,
@@ -107,7 +111,9 @@ module Brainiac
             run_agent(prompt,
                       project_config: project_config, chdir: worktree_path,
                       log_name: "summarize-#{card_number}", agent_name: agent_name,
-                      source: :fizzy,
+                      source: :fizzy, cli_provider: overrides["cli_provider"],
+                      model: overrides["model"], explicit_model: overrides["model"] ? true : nil,
+                      effort: overrides["effort"], profile: overrides["profile"],
                       source_context: { card_number: card_number, skip_summarize_redispatch: true },
                       skip_column_move: true)
           end
