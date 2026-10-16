@@ -31,6 +31,11 @@ class TestFizzyHooks < Minitest::Test
     assert_equal "grok", results.compact.first
   end
 
+  def test_detect_cli_provider_from_colon_tag
+    results = Brainiac.emit(:detect_cli_provider, tags: [{ "name" => "CLI:Claude" }])
+    assert_equal "claude", results.compact.first
+  end
+
   def test_detect_cli_provider_no_match
     results = Brainiac.emit(:detect_cli_provider, tags: [{ "name" => "marketplace" }])
     assert_nil results.compact.first
