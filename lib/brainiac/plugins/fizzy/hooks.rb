@@ -498,15 +498,15 @@ module Brainiac
             LOG.warn "[Fizzy] Webhook reactivation check failed: #{e.message}"
           end
 
-          # Detect CLI provider from Fizzy card tags (e.g., cli-grok tag)
+          # Detect CLI provider from Fizzy card tags (e.g., cli-grok or cli:grok tag)
           def register_detect_cli_provider
             Brainiac.on(:detect_cli_provider) do |ctx|
               tags = ctx[:tags] || []
               result = nil
               tags.each do |tag|
                 name = (tag.is_a?(Hash) ? tag["name"] : tag).to_s.downcase
-                if name.start_with?("cli-")
-                  result = name.sub("cli-", "")
+                if (match = name.match(/\Acli[-:]\s*(\w+)\z/))
+                  result = match[1]
                   break
                 end
               end
