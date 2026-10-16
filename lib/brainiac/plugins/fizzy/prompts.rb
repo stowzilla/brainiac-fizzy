@@ -117,6 +117,9 @@ module Brainiac
           - Check your memory file for context on what's already been discussed/decided
 
           If you've already addressed what's being asked, reply confirming it's done.
+
+          **Response destination: Post your response as a comment on this Fizzy card.**
+          Anything you only print to stdout is never seen.
         PROMPT
 
         MENTION = <<~PROMPT
@@ -124,6 +127,9 @@ module Brainiac
           You are on branch "{{BRANCH}}" in a dedicated worktree.
 
           Investigate the codebase and respond accordingly.
+
+          **Response destination: Post your response as a comment on this Fizzy card.**
+          Anything you only print to stdout is never seen.
         PROMPT
 
         CROSS_AGENT_REVIEW = <<~'PROMPT'
@@ -137,6 +143,9 @@ module Brainiac
 
           You are in your own worktree at `{{WORKTREE_PATH}}` on branch `{{BRANCH}}`.
           Respond to what's being asked — code review, opinion, debugging help, or sanity check.
+
+          **Response destination: Post your response as a comment on Fizzy card #{{CARD_NUMBER}}.**
+          Anything you only print to stdout is never seen.
 
           **IMPORTANT: Do NOT @mention any other agents in your response.**
         PROMPT
