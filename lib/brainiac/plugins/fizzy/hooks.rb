@@ -351,7 +351,7 @@ module Brainiac
             card_title = card_info["title"] || ctx[:pr_title]
 
             prompt = render_prompt(Prompts::UAT_TESTING,
-                                   { "CARD_NUMBER" => card_number, "CARD_TITLE" => card_title,
+                                   { "CARD_NUMBER" => card_number, "CARD_ID" => card_number, "CARD_TITLE" => card_title,
                                      "PR_NUMBER" => ctx[:pull_request]["number"].to_s },
                                    brain_context: build_brain_context(agent_name: agent_name, card_number: card_number,
                                                                       card_title: card_title, project_key: project_key),

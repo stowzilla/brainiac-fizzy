@@ -104,7 +104,8 @@ module Brainiac
           def dispatch_summarize_agent(card_number, card_title, branch, agent_name, project_config, worktree_path,
                                        overrides: {})
             prompt = render_prompt(Prompts::SUMMARIZE_WORK,
-                                   { "CARD_NUMBER" => card_number, "CARD_TITLE" => card_title, "BRANCH" => branch },
+                                   { "CARD_NUMBER" => card_number, "CARD_ID" => card_number, "CARD_TITLE" => card_title,
+                                     "BRANCH" => branch },
                                    brain_context: "", agent_name: agent_name, channel: :fizzy,
                                    board_key: Config.board_key_for_project(project_config))
 
