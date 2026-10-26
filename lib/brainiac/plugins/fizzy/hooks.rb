@@ -245,22 +245,24 @@ module Brainiac
               tags = ctx[:tags] || []
               assign_to = ctx[:assign_to]
 
-              # Resolve tag IDs
               agent_env = agent_env_for("Threepio")
               spawn_env = agent_env.empty? ? {} : agent_env
-              tag_ids = resolve_tag_ids(tags, spawn_env)
 
-              cmd = ["fizzy", "card", "create", "--board", board_id, "--title", title, "--description", description]
-              cmd.push("--tag-ids", tag_ids.join(",")) unless tag_ids.empty?
-
-              output, status = Open3.capture2e(spawn_env, *cmd)
-              next nil unless status.success?
+              # fizzy 4 has no tag flag on create, so tags go on afterwards
+              output, status = Open3.capture2e(spawn_env, "fizzy", "card", "create", "--board", board_id,
+                                               "--title", title, "--description", description)
+              unless status.success?
+                LOG.error "[Fizzy] fizzy card create failed: #{output.strip[0, 300]}" if defined?(LOG)
+                next nil
+              end
 
               card_data = JSON.parse(output)
               card_number = card_data.dig("data", "number")
 
-              # Assign if requested
-              assign_card(card_number, assign_to, spawn_env) if card_number && assign_to
+              if card_number
+                tag_card(card_number, tags, spawn_env)
+                assign_card(card_number, assign_to, spawn_env) if assign_to
+              end
 
               { number: card_number, url: card_data.dig("data", "url"), title: title }
             rescue StandardError => e
@@ -416,17 +418,12 @@ module Brainiac
             closed
           end
 
-          def resolve_tag_ids(tag_names, spawn_env)
-            output, status = Open3.capture2e(spawn_env, "fizzy", "tag", "list", "--all")
-            return [] unless status.success?
-
-            all_tags = JSON.parse(output)["data"] || []
-            tag_names.filter_map do |name|
-              tag = all_tags.find { |t| t["title"].downcase == name.downcase }
-              tag&.dig("id")
+          # `fizzy card tag` toggles, which is safe on a card that was just created.
+          def tag_card(card_number, tag_names, spawn_env)
+            tag_names.each do |name|
+              output, status = Open3.capture2e(spawn_env, "fizzy", "card", "tag", card_number.to_s, "--tag", name)
+              LOG.warn "[Fizzy] Couldn't tag card ##{card_number} #{name}: #{output.strip[0, 200]}" if !status.success? && defined?(LOG)
             end
-          rescue StandardError
-            []
           end
 
           def assign_card(card_number, agent_name, spawn_env)
