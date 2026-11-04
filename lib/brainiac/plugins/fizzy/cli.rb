@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require_relative "agent_setup"
 
 module Brainiac
   module Plugins
@@ -792,32 +793,10 @@ module Brainiac
         []
       end
 
-      # Called by brainiac CLI after `agent create` — prompts for Fizzy user ID.
+      # Called by brainiac CLI after `agent create` / `agent setup` — provisions
+      # the agent's Fizzy user (see AgentSetup). Safe to re-run.
       def self.on_agent_created(agent_key, entry)
-        return unless $stdin.tty?
-
-        config_file = File.join(ENV.fetch("BRAINIAC_DIR", File.join(Dir.home, ".brainiac")), "fizzy.json")
-        return unless File.exist?(config_file)
-
-        display_name = entry["display_name"] || agent_key.capitalize
-        puts ""
-        puts "  [Fizzy] Configure Fizzy for #{display_name}?"
-        print "  Fizzy user ID (or blank to skip): "
-        user_id = $stdin.gets&.chomp
-        return if user_id.nil? || user_id.empty?
-
-        config = JSON.parse(File.read(config_file))
-        config["authorized_users"] ||= []
-
-        existing = config["authorized_users"].find { |u| u["id"] == user_id || u["name"]&.downcase == display_name.downcase }
-        if existing
-          puts "  ✓ #{display_name} already in authorized_users (id: #{existing["id"]})"
-          return
-        end
-
-        config["authorized_users"] << { "id" => user_id, "name" => display_name, "human" => false }
-        File.write(config_file, JSON.pretty_generate(config))
-        puts "  ✓ Added #{display_name} (#{user_id}) to fizzy.json authorized_users"
+        AgentSetup.run(agent_key, entry)
       rescue JSON::ParserError => e
         puts "  ⚠ Could not update fizzy.json: #{e.message}"
       end
