@@ -27,9 +27,52 @@ Then add to `~/.brainiac/plugins.json`:
 }
 ```
 
+## Setup
+
+Requires the [`fizzy` CLI](https://github.com/robzolkos/fizzy-cli), installed and configured for your account.
+
+### Adding an agent (recommended)
+
+```bash
+brainiac agent create "Galen" --local --avatar galen.png --description-file galen.md
+```
+
+Fizzy has no API for creating users or issuing tokens, so there's one manual step. The plugin prints your account's join link; open it **in a private window** (so you're not signed in as yourself), join as the agent's email, click the magic link from that inbox, then Profile → Personal access tokens → create a token with write access and paste it in once. Everything else is automated:
+
+- Fizzy user name and avatar set (falls back to `admin_token` if the agent can't edit its own profile)
+- Agent added to `authorized_users` in `~/.brainiac/fizzy.json` (`"human": false`)
+- `FIZZY_TOKEN` saved to the agent's `env` in `~/.brainiac/agents.json`
+
+This step is skipped until `fizzy.json` exists — set up a board first (below). For an existing agent, an interrupted create, or after installing this plugin, run `brainiac agent setup galen` (add `--only fizzy` to run just this plugin; `--skip fizzy` leaves Fizzy out). It's safe to re-run: agents that already have a token and an `authorized_users` entry are skipped.
+
+**Manual alternative:** create the Fizzy user and token as above, add `{ "id": "<fizzy-user-id>", "name": "Galen", "human": false }` to `authorized_users` in `fizzy.json`, and set `FIZZY_TOKEN` in the agent's `env` in `~/.brainiac/agents.json`.
+
+### Boards
+
+```bash
+brainiac fizzy board setup                   # pick/create a board, map columns, create the webhook
+brainiac fizzy board assign <project> <board-key>
+```
+
+`board setup` can create the lifecycle columns (`right_now`, `needs_review`, `uat`) and the webhook for you, saving the signing secret to `fizzy.json`. Run `brainiac fizzy setup` to check what's configured.
+
+## Commands
+
+```
+brainiac fizzy setup                              Check config and print next steps
+brainiac fizzy config                             Show fizzy.json
+brainiac fizzy status                             Fizzy status (via the running server)
+brainiac fizzy board setup                        Add a board (interactive, fetches columns from Fizzy)
+brainiac fizzy board list                         List boards, columns, and assigned projects
+brainiac fizzy board assign <project> <board-key> Assign a project to a board
+brainiac fizzy board columns <board-key>          Refresh a board's columns from Fizzy
+brainiac fizzy board webhook <board-key> [url]    Create/replace the webhook and save its secret
+brainiac fizzy env setup <card-number>            Deploy an ephemeral Belt env for an already-worked card
+```
+
 ## Configuration
 
-Fizzy configuration lives in `~/.brainiac/fizzy.json` (same as before):
+Fizzy configuration lives in `~/.brainiac/fizzy.json`:
 
 ```json
 {
@@ -37,6 +80,7 @@ Fizzy configuration lives in `~/.brainiac/fizzy.json` (same as before):
     { "id": "user-id-1", "name": "Andy", "human": true },
     { "id": "agent-id-1", "name": "Galen", "human": false }
   ],
+  "admin_token": "admin-personal-access-token",
   "uat_agent": false,
   "uat_agent_tag": "uat",
   "boards": {
@@ -52,6 +96,11 @@ Fizzy configuration lives in `~/.brainiac/fizzy.json` (same as before):
   }
 }
 ```
+
+- `authorized_users` — only webhook events from these users are acted on; `human` marks people vs. agents
+- `admin_token` — optional admin access token, used to read the join link, edit agent profiles, and reactivate disabled webhooks
+- `boards.<key>.webhook_secret` — falls back to the `FIZZY_WEBHOOK_SECRET` env var
+- Projects map to boards via `fizzy_board` in `projects.json` (`brainiac fizzy board assign`) or a `.fizzy.yaml` in the repo
 
 ### UAT agent (`uat_agent`)
 
@@ -84,7 +133,7 @@ states:
 
 ## Webhook Setup
 
-Set your Fizzy webhook URL to:
+`brainiac fizzy board setup` / `board webhook` create this for you. To do it by hand, set your Fizzy webhook URL to:
 ```
 https://your-ngrok.ngrok-free.app/fizzy/development
 ```
@@ -95,29 +144,17 @@ Where `development` is the board key from `fizzy.json`. Set the secret to the bo
 
 This plugin runs inside the brainiac server process and uses core functions:
 
-- `verify_signature!` — webhook HMAC verification
 - `run_agent` — agent CLI dispatch
 - `session_active?`, `already_processed?` — deduplication
-- `identify_project_by_tags` — card-to-project mapping
 - `create_or_reuse_worktree` — git worktree management
-- `prefetch_card_context` — card body/comments pre-fetch
 - `render_prompt` — prompt template composition
 - `reload_projects!`, `reload_agent_registry!` — config hot-reload
 
-These are all provided by the `brainiac` gem (runtime dependency).
+These are all provided by the `brainiac` gem (runtime dependency). Webhook signature verification, tag-to-project mapping, and card context pre-fetch live in this plugin.
 
 ## Migrating from Built-in Handler
 
-If upgrading from brainiac's built-in Fizzy handler:
-
-1. Install the plugin: `brainiac install fizzy`
-2. Disable the built-in handler in `~/.brainiac/brainiac.json`:
-   ```json
-   { "handlers": { "fizzy": false } }
-   ```
-3. Restart: `brainiac restart`
-
-The plugin uses the exact same config files and functions — it's a drop-in replacement.
+Older Brainiac versions shipped a built-in Fizzy handler; core no longer includes it. Install the plugin (`brainiac install fizzy`) and restart (`brainiac restart`). It uses the same config files, so it's a drop-in replacement.
 
 ## Development
 
@@ -125,6 +162,7 @@ The plugin uses the exact same config files and functions — it's a drop-in rep
 cd ~/Code/brainiac-fizzy
 bundle install
 rake test
+rake rubocop
 ```
 
 ## License
